@@ -24,8 +24,9 @@ global s
 % NOTE: Consider including an added mass term to drag equations        
 
 % Components of drag
-drag_x  = - 0.5*s.cDrag*s.rho*s.SA*(sqrt(y(2)^2 + y(4)^2))*y(2);
-drag_y  = - 0.5*s.cDrag*s.rho*s.SA*(sqrt(y(2)^2 + y(4)^2))*y(4);
+drag_x      = - 0.5*s.cDrag*s.rho*s.SA*(sqrt(y(2)^2 + y(4)^2))*y(2);
+drag_y      = - 0.5*s.cDrag*s.rho*s.SA*(sqrt(y(2)^2 + y(4)^2))*y(4);
+drag_theta  = - s.SA*s.rho*y(6)*abs(y(6));
 
 % Preallocate derivative vector for system of equations
 dy = zeros(6,1);
@@ -40,7 +41,7 @@ dy(4) = (F_parl_val*sin(y(5)) + drag_y) ./ s.mass;
 
 % Equations for theta (assume COM of body is anterior to its midpoint)
 dy(5) = y(6);
-dy(6) = (0.7 * s.bodyL * F_norm_val - s.SA*s.rho*y(6)*abs(y(6))) ./ (s.bodyI);
+dy(6) = (0.7 * s.bodyL * F_norm_val + drag_theta) ./ (s.bodyI);
 
 end
 
