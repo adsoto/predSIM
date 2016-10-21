@@ -1,4 +1,4 @@
-function [gama,v_n,a_n] = fin_kine(p,t)
+function [beta,fin_L,fin_D] = fin_kine(s,y,t)
 % FIN_KINE sets up the motion of the caudal fin used for propulsion.
 % Both heave and pitch are modeled as sine functions.
 % The angle of attack, alpha, is a function of heave and pitch. 
@@ -17,41 +17,65 @@ if nargin<1
 end
 
 % Set fish body velocity (m/s)
-u_fish = 0.02; 
+% u_fish = 0.02; 
 
 %% Motion Parameters
+
 % Max heave amplitude (Length)
-h0 = p.h0;
+h0 = s.h0;
 
 % Max pitch amplitude (rads)
-theta0 = p.theta0;
+pitch0 = s.pitch0;
 
 % Tail-beat frequency of fin (s^-1)
-freq = p.tailFreq;
+freq = s.tailFreq;
 
 % Circular frequency of fin (rad/s);
 omega = 2*pi*freq;
 
 % Phase lag (between pitch and heave, pitch leads)
-psi = p.psi;
+psi = s.psi;
 
-%% Equations
+% Speed of fish
+u_fish = sqrt(y(2)^2 + y(4)^2);
+
+% Check for zero fish velocity
+if u_fish==0
+    % Set speed of fish to max. heave velocity
+    u_fish = h0*omega;
+end
+
+%% Fin motion Equations
 
 % Heave equation
 heave = h0 * sin(omega * t);
 
 % Pitch equation
-theta = theta0 * sin(omega * t + psi);
+pitch = pitch0 * sin(omega * t + psi);
 
 % Derivative of heave
 h_prime = h0 * omega * cos(omega * t);
 
 % Angle of attack (needs velocity of fish, u_fish or max heave velocity)
-alpha = -atan(h_prime ./ u_fish) + theta;
+alpha = -atan(h_prime ./ u_fish) + pitch;
+
+% Sum of alpha and pitch
+beta = alpha + pitch;
+
+%% Compute forces
+
+% Circulation (assume flat plate)
+circulation = -pi * (u_fish - h_prime) * s.finL * sin(alpha);
+
+% Lift 
+fin_L = s.rho * (u_fish - h_prime) * circulation;
+
+% Drag 
+fin_D = 0.5 * s.cDrag_fin * abs((u_fish - h_prime)) * (u_fish - h_prime);
 
 %% For test simulations
 
-if 1
+if 0
     % Define airfoil geometry
     x_foil = linspace(0,1,500);
     y_foil = 0.6*(0.2969*sqrt(x_foil) - 0.1260*x_foil ...
