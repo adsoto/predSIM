@@ -67,11 +67,11 @@ cDrag   = 1.44E2 * bodyL^(-2.34);
 p.cDrag = cDrag * 10^-3;
 
 % Pred initial position
-p.predX = 0;                            % (m)
+p.predX = 0;                         % (m)
 p.predY = 0;                         % (m)
 
 % Pred initial heading
-p.theta = pi/12;                         % (rad)
+p.theta = 0;                         % (rad)
 
 % Distance threshold
 p.dThresh = 0.5 * p.bodyL;              % (m)
@@ -79,22 +79,26 @@ p.dThresh = 0.5 * p.bodyL;              % (m)
 %% Caudal fin parameters
 
 % Fin length (m)
-p.finL      = p.bodyL * 0.1;
+p.finL      = p.bodyL * 0.2;
+
+% Peduncle length (m);
+p.pedL      = p.finL * 0.5;
 
 % Heave amplitude (m)
 p.h0        = p.finL * 0.25;
 
 % Pitch amplitude (rad)
-p.pitch0    = 15*pi/180;
+p.pitch0    = 30*pi/180;
 
 % Tail-beat frequency (Hz)
-p.tailFreq  = 2;
+p.tailFreq  = 1;
 
 % Phase lag (pitch leads heave) (rad)
-p.psi       = 60*pi/180;
+p.psi       = 90*pi/180;
 
 % Drag on fin
-p.cDrag_fin = 0.2;
+p.cD_parl   = 0.3;
+p.cD_perp   = 0.1;
 
 %% Global variables declared
 % These variables are passed to the governing function during the
@@ -117,7 +121,8 @@ s.rel_tol   = p.rel_tol;
 s.theta     = p.theta;
 s.pitch0    = p.pitch0;
 s.psi       = p.psi; 
-s.cDrag_fin = p.cDrag_fin;
+s.cD_parl   = p.cD_parl;
+s.cD_perp   = p.cD_perp;
 
 % Linear/Area dimensions
 s.bodyL     = p.bodyL   * sL;
@@ -129,6 +134,7 @@ s.predX     = p.predX   * sL;
 s.predY     = p.predY   * sL;
 s.dThresh   = p.dThresh * sL;
 s.finL      = p.finL    * sL;
+s.pedL      = p.pedL    * sL;
 s.h0        = p.h0      * sL;
 
 % Mechanical properties
@@ -175,7 +181,13 @@ tspan = [0 s.simDur];
 % Initial conditions in the form: [x, x', y, y', theta, theta']
 init = [s.predX, 0, s.predY, 0, s.theta, 0]';
 
-% Initial distance
+% Distance from body COM to fin quarter-chord point
+s.d_bodyfin = 0.7*s.bodyL+s.pedL+0.25*s.finL;
+
+% Initial position of fin 1/4 chord point (for 0<theta<180)
+% s.fp = [s.predX - s.d_bodyfin*cos(s.theta), s.predY - s.d_bodyfin*sin(s.theta)];
+
+% Initial distance to prey
 [~,~,distInit] = controlParams(init);
 
 % Create empty output vectors and counters

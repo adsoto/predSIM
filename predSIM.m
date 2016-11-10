@@ -13,6 +13,9 @@ drag_x  = - 0.5*s.cDrag*s.rho*s.SA*(sqrt(y(2)^2 + y(4)^2))*y(2);
 drag_y  = - 0.5*s.cDrag*s.rho*s.SA*(sqrt(y(2)^2 + y(4)^2))*y(4);
 drag_theta  = - s.SA*s.rho*y(6)*abs(y(6));
 
+% Get current position of fin quarter-chord point
+s.fp = [y(1) - s.d_bodyfin*cos(y(5)), y(3) - s.d_bodyfin*sin(y(5))];
+
 % Lift and Drag on fin
 [beta, fin_L, fin_D] = fin_kine(s,y,t);
 
