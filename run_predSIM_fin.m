@@ -16,8 +16,8 @@ plotOn = 1;
 
 % Prey initial position (from input)
 if nargin < 2
-    p.preyX = 1;                       % (m)
-    p.preyY = 1;                      % (m)
+    p.preyX = 0.1;                       % (m)
+    p.preyY = 0.1;                      % (m)
 else
     p.preyX = xPrey;
     p.preyY = yPrey;
@@ -29,13 +29,13 @@ if nargin < 3
 end
 
 % Time span (sec)
-p.simDur = 2;
+p.simDur = 30;
 
 % Maximum step size of simulation (s)
-p.maxStep   = 1e-2;
+p.maxStep   = 1e-1;
 
 % Relative tolerence of the simulation
-p.rel_tol = 1e-7;
+p.rel_tol = 1e-4;
 
 %% Morphological and mechanical parameters
 % Scaling relations come from McHenry & Lauder (2006)
@@ -44,7 +44,7 @@ p.rel_tol = 1e-7;
 p.rho = 1000;
 
 % Body length for a small adult (mm)
-bodyL   = 10^1.4;
+bodyL   = 10^1.5;
 p.bodyL = bodyL * 10^-3;                % (m)
 
 % Body width (mm)
@@ -66,6 +66,9 @@ p.bodyI = (p.mass/5) * (p.bodyL^2 + p.bodyW^2) + p.mass*(0.2*p.bodyL)^2;
 cDrag   = 1.44E2 * bodyL^(-2.34);
 p.cDrag = cDrag * 10^-3;
 
+% Rotational drag (dimensionless)
+p.cDrag_rot = 0.02;
+
 % Pred initial position
 p.predX = 0;                         % (m)
 p.predY = 0;                         % (m)
@@ -74,27 +77,36 @@ p.predY = 0;                         % (m)
 p.theta = 0;                         % (rad)
 
 % Distance threshold
-p.dThresh = 0.5 * p.bodyL;              % (m)
+p.dThresh = 0.1 * p.bodyL;              % (m)
 
 %% Caudal fin parameters
 
-% Fin length (m)
-p.finL      = p.bodyL * 0.2;
+% Fin length (m); estimate based on literature (Plaut, 2000)
+p.finL      = p.bodyL * 0.19 ;
 
-% Peduncle length (m);
-p.pedL      = p.finL * 0.5;
+% Peduncle length (m); estimate based on observation & anatomy
+p.pedL      = p.bodyL * 0.12;
+
+% Fin height (m); estimate based on literature (Plaut, 2000)
+p.finH      = p.bodyL * 0.18;
+
+% Fin span (m^2)
+p.finSpan      = p.finH^2;
+
+% Fin surface area (m^2), estimate based on literature (Plaut, 2000)
+p.finA         = p.finSpan / 2.05; 
 
 % Heave amplitude (m)
-p.h0        = p.finL * 0.25;
+p.h0        = 0 * p.finL;
 
 % Pitch amplitude (rad)
-p.pitch0    = 30*pi/180;
+p.pitch0    = 20*pi/180;
 
 % Tail-beat frequency (Hz)
-p.tailFreq  = 1;
+p.tailFreq  = 2;
 
 % Phase lag (pitch leads heave) (rad)
-p.psi       = 90*pi/180;
+p.psi       = 65*pi/180;
 
 % Drag on fin
 p.cD_parl   = 0.3;
@@ -117,10 +129,11 @@ sT = 10^0;
 
 % Dimensionless parameters
 s.cDrag     = p.cDrag;
+s.cDrag_rot  = p.cDrag_rot;
 s.rel_tol   = p.rel_tol;
 s.theta     = p.theta;
-s.pitch0    = p.pitch0;
 s.psi       = p.psi; 
+s.pitch0    = p.pitch0;
 s.cD_parl   = p.cD_parl;
 s.cD_perp   = p.cD_perp;
 
@@ -136,6 +149,8 @@ s.dThresh   = p.dThresh * sL;
 s.finL      = p.finL    * sL;
 s.pedL      = p.pedL    * sL;
 s.h0        = p.h0      * sL;
+% s.pitch0    = p.pitch0  * sL;
+s.finA      = p.finA    * sL^2;
 
 % Mechanical properties
 s.mass      = p.mass    * sM;

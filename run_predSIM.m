@@ -25,11 +25,11 @@ end
 
 % Gain Parameter
 if nargin < 3
-    kp = 4.5e-3;
+    kp = 3.5e-3;
 end
 
 % Time span (sec)
-p.simDur = 30;
+p.simDur = 20;
 
 % Maximum step size of simulation (s)
 p.maxStep   = 1e-2;
@@ -67,14 +67,14 @@ cDrag   = 1.44E2 * bodyL^(-2.34);
 p.cDrag = cDrag * 10^-3;
 
 % Pred initial position
-p.predX = 0;                       % (m)
-p.predY = -0.1;                       % (m)
+p.predX = -0.1;                       % (m)
+p.predY = -0.2;                       % (m)
 
 % Pred initial heading
-p.theta = pi/2;                        % (rad)
+p.theta = pi/10;                        % (rad)
 
 % Distance threshold
-p.dThresh = 0.5 * p.bodyL;       % (m)
+p.dThresh = 2 * p.bodyL;       % (m)
 
 %% Global variables declared
 % These variables are passed to the governing function during the
@@ -130,7 +130,7 @@ rangeY = s.preyY - (s.predY + (0.3*s.bodyL)*sin(s.theta));
 alpha = atan2(rangeY,rangeX);
 
 % Bearing angle (positive is to left of pred, negative to the right)
-phi = alpha - s.theta;
+phi = atan2(sin(alpha - s.theta), cos(alpha - s.theta));
 
 % Direction of the turn (1=CCW, -1=CW)
 s.turnDirec = sign(phi);
@@ -210,7 +210,7 @@ while ~s.capture
 %     [~,~,distCurr] = controlParams(init);
 %     glideDur = distCurr 
     
-    % Solve ODE during glide for 0.35 sec
+    % Solve ODE during glide for 0.4 sec
     [t,y,te,ye,ie] = ode45(@(t,y) predSIM_glide(t,y),...
         [t(nt),t(nt)+0.4], init, opts);
     
