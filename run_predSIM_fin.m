@@ -29,7 +29,7 @@ if nargin < 3
 end
 
 % Time span (sec)
-p.simDur = 30;
+p.simDur = 10;
 
 % Maximum step size of simulation (s)
 p.maxStep   = 1e-1;
@@ -74,7 +74,7 @@ p.predX = 0;                         % (m)
 p.predY = 0;                         % (m)
 
 % Pred initial heading
-p.theta = 0;                         % (rad)
+p.theta = 0*pi/180;                         % (rad)
 
 % Distance threshold
 p.dThresh = 0.1 * p.bodyL;              % (m)
@@ -96,8 +96,8 @@ p.finSpan      = p.finH^2;
 % Fin surface area (m^2), estimate based on literature (Plaut, 2000)
 p.finA         = p.finSpan / 2.05; 
 
-% Heave amplitude (m)
-p.h0        = 0 * p.finL;
+% Heave amplitude (rad)
+p.h0        = 0*pi/180;
 
 % Pitch amplitude (rad)
 p.pitch0    = 20*pi/180;
@@ -106,7 +106,7 @@ p.pitch0    = 20*pi/180;
 p.tailFreq  = 2;
 
 % Phase lag (pitch leads heave) (rad)
-p.psi       = 65*pi/180;
+p.psi       = 0*pi/180;
 
 % Drag on fin
 p.cD_parl   = 0.3;
@@ -127,6 +127,11 @@ sL = 1 / p.bodyL;
 sM = 1 / p.mass;
 sT = 10^0;
 
+% Store scaling factors in 's' structure
+s.SL = sL;
+s.sM = sM;
+s.sT = sT;
+
 % Dimensionless parameters
 s.cDrag     = p.cDrag;
 s.cDrag_rot  = p.cDrag_rot;
@@ -134,6 +139,7 @@ s.rel_tol   = p.rel_tol;
 s.theta     = p.theta;
 s.psi       = p.psi; 
 s.pitch0    = p.pitch0;
+s.h0        = p.h0;
 s.cD_parl   = p.cD_parl;
 s.cD_perp   = p.cD_perp;
 
@@ -148,8 +154,6 @@ s.predY     = p.predY   * sL;
 s.dThresh   = p.dThresh * sL;
 s.finL      = p.finL    * sL;
 s.pedL      = p.pedL    * sL;
-s.h0        = p.h0      * sL;
-% s.pitch0    = p.pitch0  * sL;
 s.finA      = p.finA    * sL^2;
 
 % Mechanical properties
@@ -194,13 +198,10 @@ opts = odeset('Events',@turnEvents,'Refine',refine,'RelTol', s.rel_tol);
 tspan = [0 s.simDur];
 
 % Initial conditions in the form: [x, x', y, y', theta, theta']
-init = [s.predX, 0, s.predY, 0, s.theta, 0]';
+init = [s.predX, 0.01, s.predY, 0.0, s.theta, 0]';
 
 % Distance from body COM to fin quarter-chord point
 s.d_bodyfin = 0.7*s.bodyL+s.pedL+0.25*s.finL;
-
-% Initial position of fin 1/4 chord point (for 0<theta<180)
-% s.fp = [s.predX - s.d_bodyfin*cos(s.theta), s.predY - s.d_bodyfin*sin(s.theta)];
 
 % Initial distance to prey
 [~,~,distInit] = controlParams(init);
@@ -215,96 +216,100 @@ ieout   = [];
 phiPre  = phi;
 phiPost = [];
  
-% while ~s.capture
-    
+while ~s.capture
+
     % Iteration counter, keep track of beat-glide events
-%     iter = iter + 1; 
+    iter = iter + 1;
+    
+    % Current time 
+    s.tCurr = tspan(1);
     
     % Solve ODE (time dependent terms passed as params)
-    [t,yout,te,ye,ie] = ode15s(@(t,y) predSIM(t,y,s),...
-        tspan, init, opts);
+    [t,y,te,ye,ie] = ode15s(@(t,y) predSIM(t,y,s),...
+        [tspan(1),tspan(1)+0.25], init, opts);
     
-%     % Accumulate output.  This could be passed out as output arguments.
-%     nt      = length(t);
-%     tout    = [tout; t(2:nt)];
-%     yout    = [yout; y(2:nt,:)];
-%     teout   = [teout; te];          % Events at tstart are never reported.
-%     yeout   = [yeout; ye];
-%     ieout   = [ieout; ie];
-% 
-%     % Set the new initial conditions.
-%     init = y(nt,:);
-%     
-%     % Set the new start time
-%     tspan(1) = t(nt);
-%     
-%     % Bearing angle after a turn
-%     [~,phiTurn,~] = controlParams(init); 
-%     phiPost = [phiPost; phiTurn];
-%     
-%     % check for a distance threshold event (ieout will contain a 1)
-%     distEvnt = ieout<2;
-%     if ~isempty(ieout(distEvnt))
-%         capInd = 1;
-%         disp('   Target captured')
-%         break
-%     else
-%     end
-%   
-%     % A good guess of a valid first timestep is the length of the last valid
-%     % timestep, so use it for faster computation.  'refine' is 4 by default.
-%     %     opts = odeset(opts,'InitialStep',t(nt)-t(nt-refine),...
-%     %         'MaxStep',t(nt)-t(1));
-%     
-% %     % Set glide duration based on current distance 
-% %     [~,~,distCurr] = controlParams(init);
-% %     glideDur = distCurr 
-%     
-%     % Solve ODE during glide for 0.35 sec
-%     [t,y,te,ye,ie] = ode45(@(t,y) predSIM_glide(t,y),...
-%         [t(nt),t(nt)+0.4], init, opts);
-%     
-%     % Accumulate output.
-%     nt      = length(t);
-%     tout    = [tout; t(2:nt)];
-%     yout    = [yout; y(2:nt,:)];
-%     teout   = [teout; te];          % Events at tstart are never reported.
-%     yeout   = [yeout; ye];
-%     ieout   = [ieout; ie];
-%     
-%     % Set the new initial conditions.
-%     init = y(nt,:);
-%     
-%     % Set the new start time
-%     tspan(1) = t(nt);
-%     
-%     % Controller parameters, computed with current state variable values
-%     [turnDirec,phi,dist] = controlParams(init); 
-%     
-%     % Store bearing angle after a glide
-% %     phiPre = [phiPre; phi];
-%     
-%     % check for a distance threshold event (ieout will contain a 1)
-%     distEvnt = ieout<2;
-%     if ~isempty(ieout(distEvnt))
-%         capInd = 1;
-%         disp('   Target captured')
-%         break
-%     else
-%     end
-%     
-%     % Check time interval
-%     if t(nt)>=tspan(2)
-%         break
-%     else
-%         % Thrust parameters for next iteration (begins with turn)
-%         [tF,F_parl,F_norm] = thrustFnc(t(nt),turnDirec,phi,kp);
-%     end
+    % Accumulate output.  This could be passed out as output arguments.
+    nt      = length(t);
+    tout    = [tout; t(2:nt)];
+    yout    = [yout; y(2:nt,:)];
+    teout   = [teout; te];          % Events at tstart are never reported.
+    yeout   = [yeout; ye];
+    ieout   = [ieout; ie];
+
+    % Set the new initial conditions.
+    init = y(nt,:);
     
-% end
+    % Set the new start time
+    tspan(1) = t(nt);
+    
+    % Bearing angle after a turn
+    [~,phiTurn,~] = controlParams(init); 
+    phiPost = [phiPost; phiTurn];
+    
+    % check for a distance threshold event (ieout will contain a 1)
+    distEvnt = ieout<2;
+    if ~isempty(ieout(distEvnt))
+        capInd = 1;
+        disp('   Target captured')
+        break
+    else
+    end
+  
+    % A good guess of a valid first timestep is the length of the last valid
+    % timestep, so use it for faster computation.  'refine' is 4 by default.
+    %     opts = odeset(opts,'InitialStep',t(nt)-t(nt-refine),...
+    %         'MaxStep',t(nt)-t(1));
+    
+%     % Set glide duration based on current distance 
+%     [~,~,distCurr] = controlParams(init);
+%     glideDur = distCurr 
+    iter = iter * 1;
+    
+    % Solve ODE during glide for 0.30 sec
+    [t,y,te,ye,ie] = ode45(@(t,y) predSIM_glide(t,y,s),...
+        [t(nt),t(nt)+0.3], init, opts);
+    
+    % Accumulate output.
+    nt      = length(t);
+    tout    = [tout; t(2:nt)];
+    yout    = [yout; y(2:nt,:)];
+    teout   = [teout; te];          % Events at tstart are never reported.
+    yeout   = [yeout; ye];
+    ieout   = [ieout; ie];
+    
+    % Set the new initial conditions.
+    init = y(nt,:);
+    
+    % Set the new start time
+    tspan(1) = t(nt);
+    
+    % Controller parameters, computed with current state variable values
+    [turnDirec,phi,dist] = controlParams(init); 
+    
+    % Store bearing angle after a glide
+%     phiPre = [phiPre; phi];
+    
+    % check for a distance threshold event (ieout will contain a 1)
+    distEvnt = ieout<2;
+    if ~isempty(ieout(distEvnt))
+        capInd = 1;
+        disp('   Target captured')
+        break
+    else
+    end
+    
+    % Check time interval
+    if t(nt)>=tspan(2)
+        break
+    else
+        % Thrust parameters for next iteration (begins with turn)
+        [tF,F_parl,F_norm] = thrustFnc(t(nt),turnDirec,phi,kp);
+    end
+    
+end
 
 % Store results
-sol.t       = t              ./ sT;
+sol.t       = tout              ./ sT;
 sol.x       = yout(:,1) ./ sL;
 sol.y       = yout(:,3) ./ sL;
 sol.theta   = yout(:,5);
@@ -316,6 +321,7 @@ sol.phiPost = phiPost;
 sol.distInit= distInit  ./ sL;
 sol.turns   = iter;
 sol.capture = capInd;
+sol.params  = s;
 
 % Clear others
 % clear t y tspan init s sT sL sM

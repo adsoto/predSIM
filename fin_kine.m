@@ -1,10 +1,14 @@
-function [s, fin_L,fin_D] = fin_kine(s,y,t)
+function [s, fin_L] = fin_kine(s,y,t)
 % FIN_KINE sets up the motion of the caudal fin used for propulsion.
 % Both heave and pitch are modeled as sine functions.
 % The angle of attack, alpha, is a function of heave and pitch.
 %
-% INPUTS:   -p: structure with fin motion parameters
+% INPUTS:   -s: structure with fin motion parameters
 %           -t: time point (ideally, should be a vector)
+%           -y: state space variables (x,y,theta) and their derivatives
+%
+% OUTPUT:   -s:     updated structure of fin motion parameters
+%           -fin_L: lift vector, given as x-y components
 
 %% Default parameters (if no input)
 if nargin<3
@@ -41,10 +45,9 @@ else
 end
 
 
-
 %% Motion Parameters
 
-% Max heave amplitude (m)
+% Max heave amplitude (rad)
 h0 = s.h0;
 
 % Max pitch amplitude (rad)
@@ -59,11 +62,11 @@ omega = 2*pi*freq;
 % Phase lag (between pitch and heave, pitch leads)
 psi = s.psi;
 
-% % Check for zero fish velocity
-% if u_fish==0
-%     % Set speed of fish to max. heave velocity
-%     u_fish = h0*omega;
-% end
+% Check for zero fish velocity
+if u_fish==0
+    % Set speed of fish to max. heave velocity
+    u_fish = h0*omega;
+end
 
 %% Fin motion Equations
 

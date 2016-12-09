@@ -1,4 +1,4 @@
-function dy = predSIM_glide(t,y)
+function dy = predSIM_glide(t,y,s)
 
 % predSIM_turn: computes the derivatives involved in solving a system of ODEs
 % which describe the position and orientation of a rigid body. This model
@@ -8,7 +8,7 @@ function dy = predSIM_glide(t,y)
 % The glabal variale 's' is a structure with parameter values
 %
 
-global s
+% global s
 
 
 % Thrust perpendicular to long axis of body
@@ -20,7 +20,8 @@ F_parl_val = 0;
 % Components of drag
 drag_x      = - 0.5*s.cDrag*s.rho*s.SA*(sqrt(y(2)^2 + y(4)^2))*y(2);
 drag_y      = - 0.5*s.cDrag*s.rho*s.SA*(sqrt(y(2)^2 + y(4)^2))*y(4);
-drag_theta  = - s.SA*s.rho*y(6)*abs(y(6));
+% drag_theta  = - s.SA*s.rho*y(6)*abs(y(6));
+drag_theta  = - 0.5*s.cDrag_rot*y(6)*abs(y(6));
 
 % Preallocate derivative vector for system of equations
 dy = zeros(6,1);

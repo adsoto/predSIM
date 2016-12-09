@@ -26,7 +26,8 @@ global s
 % Components of drag
 drag_x      = - 0.5*s.cDrag*s.rho*s.SA*(sqrt(y(2)^2 + y(4)^2))*y(2);
 drag_y      = - 0.5*s.cDrag*s.rho*s.SA*(sqrt(y(2)^2 + y(4)^2))*y(4);
-drag_theta  = - s.SA*s.rho*y(6)*abs(y(6));
+% drag_theta  = - s.SA*s.rho*y(6)*abs(y(6));
+drag_theta  = - 0.5*s.cDrag_rot*y(6)*abs(y(6));
 
 % Preallocate derivative vector for system of equations
 dy = zeros(6,1);
