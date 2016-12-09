@@ -17,7 +17,7 @@ plotOn = 1;
 % Prey initial position (from input)
 if nargin < 2
     p.preyX = 0.1;                       % (m)
-    p.preyY = 0.1;                      % (m)
+    p.preyY = -0.1;                      % (m)
 else
     p.preyX = xPrey;
     p.preyY = yPrey;
@@ -29,7 +29,7 @@ if nargin < 3
 end
 
 % Time span (sec)
-p.simDur = 10;
+p.simDur = 100;
 
 % Maximum step size of simulation (s)
 p.maxStep   = 1e-1;
@@ -184,7 +184,7 @@ alpha = atan2(rangeY,rangeX);
 phi = alpha - s.theta;
 
 % Direction of the turn (1=CCW, -1=CW)
-s.turnDirec = sign(phi);
+turnDirec = sign(phi);
 
 
 %% Run ODE solver in a loop
@@ -224,9 +224,12 @@ while ~s.capture
     % Current time 
     s.tCurr = tspan(1);
     
+    % Set turn direction parameter
+    s.turnDirec = turnDirec;
+    
     % Solve ODE (time dependent terms passed as params)
     [t,y,te,ye,ie] = ode15s(@(t,y) predSIM(t,y,s),...
-        [tspan(1),tspan(1)+0.25], init, opts);
+        [tspan(1),tspan(1)+0.125], init, opts);
     
     % Accumulate output.  This could be passed out as output arguments.
     nt      = length(t);
@@ -328,7 +331,7 @@ sol.params  = s;
 
 %% Plot solutions
 
-close all
+% close all
 
 if plotOn
     
@@ -407,8 +410,8 @@ end
 %         global s
 
         % Heading angle (velocity direction)
-%         heading = y(5);
-        heading = atan2(y(4),y(2));
+        heading = y(5);
+%         heading = atan2(y(4),y(2));
         
         % Vector from pred to prey (range vector)
         rangeX = s.preyX - (y(1) + (0.3*s.bodyL)*cos(heading));
@@ -417,6 +420,7 @@ end
         % Distance to prey (scaled units)
         dist = norm([rangeX, rangeY]);
         
+        % Angle of range vector
         alpha = atan2(rangeY,rangeX);
         
         % Bearing angle

@@ -66,6 +66,9 @@ p.bodyI   = (p.mass/5) * (p.bodyL^2 + p.bodyW^2) + p.mass*(0.2*p.bodyL)^2;
 cDrag   = 1.44E2 * bodyL^(-2.34);
 p.cDrag = cDrag * 10^-3;
 
+% Rotational drag (dimensionless)
+p.cDrag_rot = 0.02;
+
 % Pred initial position
 p.predX = -0.1;                       % (m)
 p.predY = -0.2;                       % (m)
@@ -93,6 +96,7 @@ sT = 10^0;
 
 % Dimensionless parameters
 s.cDrag     = p.cDrag;
+s.cDrag_rot = p.cDrag_rot;
 s.rel_tol   = p.rel_tol;
 s.theta     = p.theta;
 
@@ -211,7 +215,7 @@ while ~s.capture
 %     glideDur = distCurr 
     
     % Solve ODE during glide for 0.4 sec
-    [t,y,te,ye,ie] = ode45(@(t,y) predSIM_glide(t,y),...
+    [t,y,te,ye,ie] = ode45(@(t,y) predSIM_glide(t,y,s),...
         [t(nt),t(nt)+0.4], init, opts);
     
     % Accumulate output.
