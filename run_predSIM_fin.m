@@ -29,7 +29,7 @@ if nargin < 3
 end
 
 % Time span (sec)
-p.simDur = 100;
+p.simDur = 10;
 
 % Maximum step size of simulation (s)
 p.maxStep   = 1e-1;
@@ -74,10 +74,10 @@ p.predX = 0;                         % (m)
 p.predY = 0;                         % (m)
 
 % Pred initial heading
-p.theta = 0*pi/180;                         % (rad)
+p.theta = 45*pi/180;                         % (rad)
 
 % Distance threshold
-p.dThresh = 0.1 * p.bodyL;              % (m)
+p.dThresh = 0.5 * p.bodyL;              % (m)
 
 %% Caudal fin parameters
 
@@ -100,7 +100,7 @@ p.finA         = p.finSpan / 2.05;
 p.h0        = 0*pi/180;
 
 % Pitch amplitude (rad)
-p.pitch0    = 20*pi/180;
+p.pitch0    = 15*pi/180;
 
 % Tail-beat frequency (Hz)
 p.tailFreq  = 2;
@@ -134,7 +134,7 @@ s.sT = sT;
 
 % Dimensionless parameters
 s.cDrag     = p.cDrag;
-s.cDrag_rot  = p.cDrag_rot;
+s.cDrag_rot = p.cDrag_rot;
 s.rel_tol   = p.rel_tol;
 s.theta     = p.theta;
 s.psi       = p.psi; 
@@ -198,7 +198,13 @@ opts = odeset('Events',@turnEvents,'Refine',refine,'RelTol', s.rel_tol);
 tspan = [0 s.simDur];
 
 % Initial conditions in the form: [x, x', y, y', theta, theta']
-init = [s.predX, 0.01, s.predY, 0.0, s.theta, 0]';
+init = [s.predX, 1.1*sL, s.predY, 1.1*sL, s.theta, 0];
+
+% Get initial position of fin
+[s, ~,~,~] = fin_kine(s,init,tspan(1));
+
+% Initial conditions in the form: [x, x', y, y', theta, theta',xFin,yFin]
+init = [init, s.finPos(1), s.finPos(2)]';
 
 % Distance from body COM to fin quarter-chord point
 s.d_bodyfin = 0.7*s.bodyL+s.pedL+0.25*s.finL;
@@ -227,11 +233,11 @@ while ~s.capture
     % Set turn direction parameter
     s.turnDirec = turnDirec;
     
-    % Solve ODE (time dependent terms passed as params)
+    % Solve ODE (during fin oscillation)
     [t,y,te,ye,ie] = ode15s(@(t,y) predSIM(t,y,s),...
-        [tspan(1),tspan(1)+0.125], init, opts);
+        [tspan(1),tspan(1)+1/s.tailFreq], init, opts);
     
-    % Accumulate output.  This could be passed out as output arguments.
+    % Accumulate output.  
     nt      = length(t);
     tout    = [tout; t(2:nt)];
     yout    = [yout; y(2:nt,:)];
@@ -257,20 +263,10 @@ while ~s.capture
         break
     else
     end
-  
-    % A good guess of a valid first timestep is the length of the last valid
-    % timestep, so use it for faster computation.  'refine' is 4 by default.
-    %     opts = odeset(opts,'InitialStep',t(nt)-t(nt-refine),...
-    %         'MaxStep',t(nt)-t(1));
     
-%     % Set glide duration based on current distance 
-%     [~,~,distCurr] = controlParams(init);
-%     glideDur = distCurr 
-    iter = iter * 1;
-    
-    % Solve ODE during glide for 0.30 sec
+    % Solve ODE (during glide for 1.0 sec)
     [t,y,te,ye,ie] = ode45(@(t,y) predSIM_glide(t,y,s),...
-        [t(nt),t(nt)+0.3], init, opts);
+        [t(nt),t(nt)+1.0], init, opts);
     
     % Accumulate output.
     nt      = length(t);
@@ -319,6 +315,8 @@ sol.theta   = yout(:,5);
 sol.dx      = yout(:,2) ./ sL   .* sT;
 sol.dy      = yout(:,4) ./ sL   .* sT;
 sol.dtheta  = yout(:,6)         .* sT;
+sol.finX    = yout(:,7) ./ sL;
+sol.finY    = yout(:,8) ./ sL;
 sol.phiPre  = phiPre;
 sol.phiPost = phiPost;
 sol.distInit= distInit  ./ sL;
@@ -331,7 +329,7 @@ sol.params  = s;
 
 %% Plot solutions
 
-% close all
+close all
 
 if plotOn
     
@@ -392,7 +390,7 @@ end
         value       = [dThresh; rotVel];
         
         % stop the integration if either event is detected
-        isterminal  = [1; 0]; 
+        isterminal  = [1; 1]; 
         
         % zero can be approached from either direction for distance
         % threshold and negative direction (decreasing) for rot. velocity

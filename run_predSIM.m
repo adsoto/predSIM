@@ -215,7 +215,7 @@ while ~s.capture
 %     glideDur = distCurr 
     
     % Solve ODE during glide for 0.4 sec
-    [t,y,te,ye,ie] = ode45(@(t,y) predSIM_glide(t,y,s),...
+    [t,y,te,ye,ie] = ode45(@(t,y) predSIM_turn(t,y),...
         [t(nt),t(nt)+0.4], init, opts);
     
     % Accumulate output.

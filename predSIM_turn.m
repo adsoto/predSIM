@@ -12,22 +12,27 @@ function dy = predSIM_turn(t,y,tF,F_norm,F_parl)
 
 global s
 
-% Interpolate the data set (fT,F_norm) at time t (relative to heading)
+if nargin < 3
+    F_norm_val = 0;
+    F_parl_val = 0;
+else
+    % Interpolate the data set (tF,F_norm) at time t (relative to heading)
     % Thrust perpendicular to long axis of body
     F_norm_val = interp1(tF,F_norm,t);
-
-
-% Interpolate the data set (fT,F_parl) at time t (relative to heading)
+    
+    
+    % Interpolate the data set (fT,F_parl) at time t (relative to heading)
     % Thrust parallel to long axis of body
     F_parl_val = interp1(tF,F_parl,t);
+end
     
 % NOTE: Consider including an added mass term to drag equations        
 
 % Components of drag
 drag_x      = - 0.5*s.cDrag*s.rho*s.SA*(sqrt(y(2)^2 + y(4)^2))*y(2);
 drag_y      = - 0.5*s.cDrag*s.rho*s.SA*(sqrt(y(2)^2 + y(4)^2))*y(4);
-% drag_theta  = - s.SA*s.rho*y(6)*abs(y(6));
-drag_theta  = - 0.5*s.cDrag_rot*y(6)*abs(y(6));
+drag_theta  = - s.SA*s.rho*y(6)*abs(y(6));
+% drag_theta  = - 0.5*s.cDrag_rot*y(6)*abs(y(6));
 
 % Preallocate derivative vector for system of equations
 dy = zeros(6,1);

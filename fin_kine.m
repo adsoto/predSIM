@@ -1,4 +1,4 @@
-function [s, fin_L] = fin_kine(s,y,t)
+function [s,lift,torque,finVel] = fin_kine(s,y,t)
 % FIN_KINE sets up the motion of the caudal fin used for propulsion.
 % Both heave and pitch are modeled as sine functions.
 % The angle of attack, alpha, is a function of heave and pitch.
@@ -16,26 +16,38 @@ if nargin<3
     t = 1.0 * linspace(0,1)';
     
     % Set fish body velocity (m/s)
-    u_fish = 0.1 * ones(length(t),1);
+    u_fish = 1.0 * ones(length(t),1);
     
     if nargin<1
-        s.finL      = 0.3;
-        s.bodyL     = 1;
-        s.h0        = 0.0 * s.finL;
-        s.pitch0    = 30*pi/180;
-        s.tailFreq  = 1;
-        s.psi       = 70*pi/180;
-        s.cD_parl   = 0.3;
-        s.cD_perp   = 0.1;
-        s.pedL      = 0.5 * s.finL;
+        % Density of fluid
         s.rho       = 1000;
-        s.finA      = s.finL*(0.25*s.finL); 
+        % Fish body length
+        s.bodyL     = 1;
+        % Fin length (m); estimate based on literature (Plaut, 2000)
+        s.finL      = s.bodyL * 0.19 ;       
+        % Peduncle length (m); estimate based on observation & anatomy
+        s.pedL      = s.bodyL * 0.12;        
+        % Fin height (m); estimate based on literature (Plaut, 2000)
+        s.finH      = s.bodyL * 0.18;        
+        % Fin span (m^2)
+        s.finSpan      = s.finH^2;        
+        % Fin surface area (m^2), estimate based on literature (Plaut, 2000)
+        s.finA         = s.finSpan / 2.05;
         
+        % Fin motion parameters
+        s.h0        = 0.0 * s.finL;
+        s.pitch0    = 15*pi/180;
+        s.tailFreq  = 2;
+        s.psi       = 0*pi/180;
+%         s.cD_parl   = 0.3;
+%         s.cD_perp   = 0.1;   
     end
 else
-    % Check that input y, is size n x 6.
+    % Check that input y, is size n x 8.
     sz_in = size(y);
-    if sz_in(2)~=6
+    if sz_in(2)==8 || sz_in(2)==6
+        y = y;
+    else
         y = y';
     end
         
@@ -72,7 +84,7 @@ end
 
 % Fish velocities and heading angle
 if nargin < 2
-    hd_ang = 0*pi/180 .* ones(length(t),1);
+    hd_ang = 10*pi/180 .* ones(length(t),1);
     x_vel = u_fish .* cos(hd_ang);
     y_vel = u_fish .* sin(hd_ang);
     hd_vel = zeros(length(t),1);
@@ -93,13 +105,14 @@ end
 heave = h0 * sin(omega * t);
 
 % Pitch equation (tail angle relative to peduncle midline)
-pitch = pitch0 * sin(omega * t + psi);
+pitch = pitch0 * (4*(t-1/freq).^2) .* sin(omega * t + psi);
 
 % Derivative of heave
 h_prime = h0 * omega * cos(omega * t);
 
 % Derivative of pitch
-p_prime = pitch0 * cos(omega * t + psi) * omega;
+p_prime = pitch0*omega*(t-1/freq).^2 .*cos(omega*t+psi) + ...
+          pitch0*sin(omega * t + psi).*(8*(t-0.5));
 
 % Angle of attack (needs velocity of fish, u_fish or max heave velocity)
 alpha = -atan(h_prime ./ u_fish) + (pitch + hd_ang);
@@ -116,15 +129,15 @@ s.finPos(:,1) = x_fish-0.7*s.bodyL*cos(hd_ang) - s.pedL*cos(hd_ang+heave) ...
 s.finPos(:,2) = y_fish-0.7*s.bodyL*sin(hd_ang) - s.pedL*sin(hd_ang+heave) ...
     -0.25*s.finL*sin(hd_ang+heave+pitch);
 
-% Current position of fin 1/4 chord point (inertial FOR)
-fp = s.finPos;
-
 % Current position of fin quarter-chord point (w.r.t. body COM)
 s.finPos_body(:,1) = -0.7*s.bodyL*cos(hd_ang) - s.pedL*cos(hd_ang+heave) ...
     -0.25*s.finL*cos(hd_ang+heave+pitch);
 
 s.finPos_body(:,2) = -0.7*s.bodyL*sin(hd_ang) - s.pedL*sin(hd_ang+heave) ...
     -0.25*s.finL*sin(hd_ang+heave+pitch);
+
+% Current position of fin 1/4 chord point (body FOR)
+fp_body = s.finPos_body;
 
 % Speed of fin in x-direction (interial frame)
 u_parl = x_vel + 0.7*s.bodyL*sin(hd_ang).*hd_vel + ...
@@ -146,16 +159,37 @@ vel_vec = [u_parl, u_perp, zeros(length(u_parl),1)];
 % Cross products of velocity with unit vectors (may be size Nx3)
 x_prod = cross(vel_vec,unit_f,2);
 
-% Lift
+% Lift 
 % fin_L = (0.5*s.rho*s.cD_parl).*abs((u_perp)).*(u_perp);
 fin_L = pi*s.rho*s.finA .* (cross(x_prod,vel_vec,2));
 
-% if fin_L(1) > 1
-%     pause
-% end
-
 % Drag
-fin_D = (0.5*s.rho*s.cD_perp).*abs((u_parl)).*(u_parl);
+% fin_D = (0.5*s.rho*s.cD_perp).*abs((u_parl)).*(u_parl);
+
+% Forward thrust (aligned with long axis of fish)
+thrust_fwd = fin_L(:,1) .* cos(hd_ang) + fin_L(:,2) .* sin(hd_ang);
+
+% Lateral thrust (perpendicular to long axis of fish)
+% thrust_lat = -fin_L(1) * sin(y(5)) + fin_L(2) * cos(y(5));
+
+% x-component of lift along body axis
+lift_x = thrust_fwd.*cos(hd_ang);
+
+% y-component of lift along body axis
+lift_y = thrust_fwd.*sin(hd_ang);
+
+% Concatenate lift x-y components
+lift = [lift_x, lift_y];
+
+% Fin speed, x-y components
+finVel = vel_vec(:,1:2);
+
+% Torque due to lift force (cross product of fin position and lift vector)
+fin_pos = [fp_body(:,1),fp_body(:,2),zeros(length(thrust_fwd),1)];
+lift_vec = [fin_L(:,1), fin_L(:,2), zeros(length(thrust_fwd),1)];
+fin_pos_cross_lift = cross(fin_pos,lift_vec,2);
+
+torque = (fin_pos_cross_lift(:,3)); 
 
 if 0
     % Plots to verify velocity (of fin) and lift are orthogonal
