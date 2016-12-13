@@ -101,18 +101,25 @@ else
 %     hd_ang = atan2(y_vel,x_vel);
 end
 
+% Function to modify shape of sine function 
+% Note: turnDirec affects which direction the tail swings)
+f1 = s.turnDirec*(10*(t-0.8).^5);
+
+% Derivative of f1
+f1_dot = s.turnDirec*(50*(t-0.8).^4);
+
 % Heave equation (peduncle angle relative to fish body midline)
 heave = h0 * sin(omega * t);
 
 % Pitch equation (tail angle relative to peduncle midline)
-pitch = pitch0 * (4*(t-1/freq).^2) .* sin(omega * t + psi);
+pitch = pitch0 * f1 .* sin(omega * t + psi);
 
 % Derivative of heave
 h_prime = h0 * omega * cos(omega * t);
 
 % Derivative of pitch
-p_prime = pitch0*omega*(t-1/freq).^2 .*cos(omega*t+psi) + ...
-          pitch0*sin(omega * t + psi).*(8*(t-0.5));
+p_prime = pitch0 * omega * f1 .* cos(omega*t+psi) + ...
+          pitch0 * sin(omega*t+psi) .* f1_dot;
 
 % Angle of attack (needs velocity of fish, u_fish or max heave velocity)
 alpha = -atan(h_prime ./ u_fish) + (pitch + hd_ang);
@@ -169,7 +176,7 @@ fin_L = pi*s.rho*s.finA .* (cross(x_prod,vel_vec,2));
 % Forward thrust (aligned with long axis of fish)
 thrust_fwd = fin_L(:,1) .* cos(hd_ang) + fin_L(:,2) .* sin(hd_ang);
 
-% Lateral thrust (perpendicular to long axis of fish)
+% Lateral thrust (perpendicular to long axis of fish), not correct
 % thrust_lat = -fin_L(1) * sin(y(5)) + fin_L(2) * cos(y(5));
 
 % x-component of lift along body axis
