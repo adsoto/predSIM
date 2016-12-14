@@ -23,6 +23,8 @@ t = linspace(sol.t(1),sol.t(end),num_time)';
 x       = interp1(sol.t,sol.x,t);
 y       = interp1(sol.t,sol.y,t);
 theta   = interp1(sol.t,sol.theta,t);
+xFin    = interp1(sol.t,sol.finX,t);
+yFin    = interp1(sol.t,sol.finY,t);
 
 % Range and limits for axes
 rng = max([range(x) range(y)]);

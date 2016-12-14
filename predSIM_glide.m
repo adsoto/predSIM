@@ -13,11 +13,11 @@ f.pitch0 = 0;
 f.h0 = 0;
 
 % Get speed of fin
-[f,lift,torque,finVel] = fin_kine(f,y,t);
+%[f,lift,torque,finVel] = fin_kine(f,y,t);
 
 % Update fin position
-s.finPos = f.finPos;
-s.finPos_body = f.finPos_body;
+%s.finPos = f.finPos;
+%s.finPos_body = f.finPos_body;
 
 % Components of drag
 drag_x      = - 0.5*s.cDrag*s.rho*s.SA*(sqrt(y(2)^2 + y(4)^2))*y(2);
@@ -40,9 +40,15 @@ dy(4) = (drag_y) ./ s.mass;
 dy(5) = y(6);
 dy(6) = (drag_theta) ./ (s.bodyI);
 
-% Fin velocity (so that fin position is returned by the solution)
-dy(7) = finVel(:,1);
-dy(8) = finVel(:,2);
+% % Fin velocity (so that fin position is returned by the solution)
+% dy(7) = finVel(:,1);
+% dy(8) = finVel(:,2);
+
+% Rate of change in fin pitch 
+dy(7) = 0;
+
+% Rate of change in fin heave
+dy(8) = 0;
 
 end
 

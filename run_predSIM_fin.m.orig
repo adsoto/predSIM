@@ -30,7 +30,11 @@ if nargin < 3
 end
 
 % Time span (sec)
+<<<<<<< HEAD
 p.simDur = 2;
+=======
+p.simDur = 3;
+>>>>>>> 4afdd65895568e8b6cac971cd8784f66f49e938e
 
 % Maximum step size of simulation (s)
 p.maxStep   = 1e-1;
@@ -44,9 +48,6 @@ p.rel_tol = 1e-4;
 
 % Density of fluid (kg/m^3)
 p.rho = 1000;
-
-% Dynamic viscosity of water (Pa s)
-p.visc = 8.9e-4;
 
 % Body length for a small adult (mm)
 bodyL   = 10^1.5;
@@ -71,31 +72,21 @@ p.bodyI = (p.mass/5) * (p.bodyL^2 + p.bodyW^2) + p.mass*(0.2*p.bodyL)^2;
 cDrag   = 1.44E2 * bodyL^(-2.34);
 p.cDrag = cDrag * 10^-3;
 
-% Lift coefficient of the tail
-p.cLift  = 2*pi;
-
 % Rotational drag (dimensionless)
-%p.cDrag_rot = 0.02;
-p.cDrag_rot = 8*pi;
+p.cDrag_rot = 0.02;
 
 % Pred initial position
 p.predX = 0;                         % (m)
 p.predY = 0;                         % (m)
 
 % Pred initial heading
-p.theta0 = 45*pi/180;                  % (rad)
+p.theta = 45*pi/180;                  % (rad)
 
 % Distance threshold
 p.dThresh = 0.5 * p.bodyL;           % (m)
 
 % Initial speed                      % (m/s) 
 p.U0 = 0.1;
-
-% Speed of tail beat (m/s)
-%p.beatSpd = 0.02;
-
-% Max amplitude of tail heaving (rad)
-p.maxHeave = pi/4;
 
 
 %% Caudal fin parameters
@@ -153,16 +144,11 @@ s.SL = sL;
 s.sM = sM;
 s.sT = sT;
 
-% Scaling factor for force & pressure
-sF = sM * sL / sT^2;
-sP = sF / sL^2;
-
 % Dimensionless parameters
 s.cDrag     = p.cDrag;
 s.cDrag_rot = p.cDrag_rot;
-s.cLift     = p.cLift;
 s.rel_tol   = p.rel_tol;
-s.theta0    = p.theta0;
+s.theta     = p.theta;
 s.psi       = p.psi; 
 s.pitch0    = p.pitch0;
 s.h0        = p.h0;
@@ -186,7 +172,6 @@ s.finA      = p.finA    * sL^2;
 s.mass      = p.mass    * sM;
 s.bodyI     = p.bodyI   * sM    * sL^2;
 s.rho       = p.rho     * sM    / sL^3;
-s.visc      = p.visc    * sP * sT;
 
 % Time
 s.simDur    = p.simDur  * sT;
@@ -195,35 +180,24 @@ s.tailFreq  = p.tailFreq / sT;
 
 % Kinematics
 s.U0        = p.U0 * sL / sT;
-%s.beatSpd   = p.beatSpd * sL / sT;
-s.maxHeave  = p.maxHeave;
 
 % Indicator variable for capture
 s.capture = 0;
-s.preyX   = p.preyX *sL;
-s.preyY   = p.preyY *sL;
 
 capInd    = 0;
 
-%clear p xPrey yPrey 
- 
 
 %% Controller parameters
 
 % Vector from pred to prey (range vector)
-rangeX = s.preyX - (s.predX + (0.3*s.bodyL)*cos(s.theta0));
-rangeY = s.preyY - (s.predY + (0.3*s.bodyL)*sin(s.theta0));
+rangeX = s.preyX - (s.predX + (0.3*s.bodyL)*cos(s.theta));
+rangeY = s.preyY - (s.predY + (0.3*s.bodyL)*sin(s.theta));
 
 % Angle of range angle (intertial FOR)
 alpha = atan2(rangeY,rangeX);
 
 % Bearing angle (positive is to left of pred, negative to the right)
-phi = alpha - s.theta0;
-
-% Deal with zero bearing with a slight offset
-if phi==0
-    phi = pi/10000;
-end
+phi = alpha - s.theta;
 
 % Direction of the turn (1=CCW, -1=CW)
 turnDirec = sign(phi);
@@ -246,15 +220,18 @@ opts2 = odeset('Events',@turnEvents2,'Refine',refine,'RelTol', s.rel_tol);
 tspan = [0 s.simDur];
 
 % Initial conditions in the form: [x, x', y, y', theta, theta']
+<<<<<<< HEAD
 %init = [s.predX, 1.1*sL, s.predY, 0.0*sL, s.theta, 0];
-init = [s.predX, s.U0*cos(s.theta0), s.predY, s.U0*sin(s.theta0), s.theta0, 0];
+init = [s.predX, s.U0*cos(s.theta), s.predY, s.U0*sin(s.theta), s.theta, 0];
+=======
+init = [s.predX, 0.025*sL, s.predY, 0.0*sL, s.theta, 0];
+>>>>>>> 4afdd65895568e8b6cac971cd8784f66f49e938e
 
 % Get initial position of fin (saved in 's' structure)
-%[s,~] = fin_kine(s,init,tspan(1));
+[s, ~,~,~] = fin_kine(s,init,tspan(1));
 
 % Initial conditions in the form: [x, x', y, y', theta, theta',xFin,yFin]
-%init = [init, s.finPos(1), s.finPos(2)]';
-init = [init, 0, 0]';
+init = [init, s.finPos(1), s.finPos(2)]';
 
 % Distance from body COM to fin quarter-chord point
 s.d_bodyfin = 0.7*s.bodyL+s.pedL+0.25*s.finL;
@@ -282,14 +259,6 @@ while ~s.capture
     
     % Set turn direction parameter
     s.turnDirec = turnDirec;
-    
-    % Speed of tail beat
-    %TODO: Make this a control parameter
-    s.beatSpd = (s.bodyL * s.tailFreq)*2;
-    
-    % Generate fin kinematics for tail beat 
-    s = gen_kinematics(s);
-    
     
     % Solve ODE (during fin oscillation,1 sec)
     [t,y,te,ye,ie] = ode15s(@(t,y) predSIM(t,y,s),...
@@ -514,113 +483,6 @@ end
         
     end
 
-
-end
-
-
-function s = gen_kinematics(s)
-
-% Number of end and center points
-numendpts  = 1000;
-numcntrpts = 300;
-
-% Default duty cycle for heaving of tail
-dCycle = 0.2;
-
-% Phase lag of pitch after heave (fraction of tail beat)
-lag = 0.05;
-
-% Tail-beat period (includes zero padding)
-tau = 1./s.tailFreq;
-
-% Peak tail speed
-Vmax = s.beatSpd;
-
-% Duration of zero-padding at start
-zStartDur = tau/10;
-
-% Duration of zero-padding at end
-zEndDur = tau/10;
-
-% Duration of beat outward
-pwr_dur = dCycle * (tau-zStartDur-zEndDur);
-
-% If the tail cannot move far enough . . .
-if pwr_dur*Vmax > s.maxHeave
-    % Set amplitude at the max
-    h_amp = s.maxHeave;
-    
-    % Calculate a new powerstroke duration
-    pwr_dur = s.maxHeave / Vmax;
-    
-    % And a new duty cycle (Later, we could put a limit on this too)
-    dCycle = pwr_dur / (tau-zStartDur-zEndDur);
-else
-    % Set heave amplitude
-    h_amp = pwr_dur*Vmax;
-end
-
-% Duration of recovery stroke
-rcvr_dur = tau-zStartDur-zEndDur-pwr_dur;
-
-% Time values
-t = [linspace(0,zStartDur,numendpts)';...
-     linspace(zStartDur,tau-zEndDur,numcntrpts)';...
-     linspace(tau-zEndDur,tau,numendpts)'];
- 
-% Initialize heave and pitch as series of zeros
-p = t.*0;
-h = t.*0;
-
-% Index of when tail is moving
-idx = (t > zStartDur) & (t<(tau-zEndDur));
-
-% Discrete heave values
-h(idx) = s.turnDirec * h_amp .* ...
-    (sawtooth(2*pi*(t(idx)-zStartDur)./(tau-zStartDur-zEndDur),dCycle)./2+0.5);
-
-% Delay of pitching after heaving
-delay = lag * (pwr_dur + rcvr_dur);
-
-% Check that zero-padding is long enough
-if zEndDur < delay
-    error(['The duration of zero padding must exceed the delay '...
-           'between heaving and pitching'])
-end
-
-% Index of power stroke
-iPwr = (t >= (zStartDur + delay)) & (t<(zStartDur + delay + pwr_dur));
-
-% Index of recovery stroke
-iRecov = (t>=(zStartDur + delay + pwr_dur)) & (t<(tau-zEndDur+delay));
-
-% Discrete pitch values during power stroke
-p(iPwr) = s.turnDirec * h_amp/2 .* ...
-    (sawtooth(2*pi*(t(iPwr)-zStartDur-delay)./(2*pwr_dur)-pi/2,0.5));
-
-% Discrete pitch values during recovery stroke
-p(iRecov) = -s.turnDirec * h_amp/2 .* ...
-    (sawtooth(2*pi*(t(iRecov)-zStartDur-delay-pwr_dur)./(2*rcvr_dur)-pi/2,0.5));
-
-% Fourier fit to heave data
-s.fHeave = fit(t,h,'fourier8');
-
-% Fourier fit to pitch data
-s.fPitch = fit(t,p,'fourier8');
-
-% Plot fits
-if 0
-   figure
-   subplot(2,1,1)
-   plot(s.fHeave,t,h)
-   grid on
-   xlabel('t');ylabel('h (rad)')
-   
-   subplot(2,1,2)
-   plot(s.fPitch,t,p)
-   xlabel('t');ylabel('p (rad)')
-   grid on
-end
 
 end
 
