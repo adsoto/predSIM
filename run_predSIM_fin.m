@@ -29,7 +29,7 @@ if nargin < 3
 end
 
 % Time span (sec)
-p.simDur = 5;
+p.simDur = 3;
 
 % Maximum step size of simulation (s)
 p.maxStep   = 1e-1;
@@ -194,14 +194,17 @@ s.turnDirec = turnDirec;
 
 refine = 4;
 
-% Solver options
+% Solver options for turning phase
 opts = odeset('Events',@turnEvents,'Refine',refine,'RelTol', s.rel_tol);
+
+% Solver options for glide phase
+opts2 = odeset('Events',@turnEvents2,'Refine',refine,'RelTol', s.rel_tol);
 
 % Time span for simulation
 tspan = [0 s.simDur];
 
 % Initial conditions in the form: [x, x', y, y', theta, theta']
-init = [s.predX, 1.1*sL, s.predY, 0.0*sL, s.theta, 0];
+init = [s.predX, 0.025*sL, s.predY, 0.0*sL, s.theta, 0];
 
 % Get initial position of fin (saved in 's' structure)
 [s, ~,~,~] = fin_kine(s,init,tspan(1));
@@ -238,7 +241,8 @@ while ~s.capture
     
     % Solve ODE (during fin oscillation,1 sec)
     [t,y,te,ye,ie] = ode15s(@(t,y) predSIM(t,y,s),...
-        [tspan(1),tspan(1)+1], init, opts);
+        tspan, init, opts);%[tspan(1),tspan(1)+1], init, opts);
+    
     
     % Accumulate output.  
     nt      = length(t);
@@ -269,7 +273,7 @@ while ~s.capture
     
     % Solve ODE (during glide for 0.5 sec)
     [t,y,te,ye,ie] = ode45(@(t,y) predSIM_glide(t,y,s),...
-        [t(nt),t(nt)+0.5], init, opts);
+        [t(nt),t(nt)+0.5], init, opts2);
     
     % Accumulate output.
     nt      = length(t);
@@ -389,7 +393,7 @@ end
         value       = [dThresh; rotVel];
         
         % stop the integration if either event is detected (set both to 1)
-        isterminal  = [1; 0]; 
+        isterminal  = [1; 1]; 
         
         % zero can be approached from either direction for distance
         % threshold and negative direction (decreasing) for rot. velocity
@@ -397,6 +401,34 @@ end
     end
 
 % -----------------------------------------------------------------------
+%
+    function [value,isterminal,direction] = turnEvents2(t,y)
+        % Locate the time when a turn is completed or when the distance
+        % threshold is satisfied
+        
+        % Get current distance to prey
+        [~,~,dist]  = controlParams(y);
+        
+        % Detect distance threshold 
+        dThresh     = (dist - s.dThresh) - 1e-5;
+        
+        % Detect rotational velocity = 0; (turn completed) 
+        % look at absolute value so that crossings are from negative direc.
+        rotVel      = abs(y(6)) - 1e-2;  
+        
+        % Value contains both events that are checked for zero crossings
+        value       = [dThresh; rotVel];
+        
+        % stop the integration if either event is detected (set both to 1)
+        isterminal  = [1; 0]; 
+        
+        % zero can be approached from either direction for distance
+        % threshold and negative direction (decreasing) for rot. velocity
+        direction   = [0; 0];      
+    end
+
+% -----------------------------------------------------------------------
+
 
     function [turnDirec,phi,dist] = controlParams(y)
         % controlParams computes the bearing angle which is then used for 
