@@ -80,6 +80,7 @@ if u_fish==0
     u_fish = h0*omega;
 end
 
+
 %% Fin motion Equations
 
 % Fish velocities and heading angle
@@ -126,6 +127,7 @@ alpha = -atan(h_prime ./ u_fish) + (pitch + hd_ang);
 
 % Sum of alpha and pitch
 beta = heave + pitch + hd_ang; %alpha + pitch;
+
 
 %% Compute forces acting on fin
    
@@ -258,7 +260,6 @@ end
 % % Velocity of center of mass of fin
 % u_parl = omega_mat(1,3) + fp(2);
 % u_perp = omega_mat(2,3) + fp(1);
-
 
 
 %% For test simulations

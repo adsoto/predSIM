@@ -1,4 +1,4 @@
-function sol = run_predSIM_fin(xPrey,yPrey,kp)
+function [p,sol] = run_predSIM_fin(xPrey,yPrey,kp)
 % Runs a numerical simulation of a swimming fish predator.
 % INPUTS:   - xPrey, yPrey: coordinates of initial prey position
 %           - kp: gain parameter for proportional control
@@ -23,19 +23,21 @@ else
     p.preyY = yPrey;
 end
 
+
 % Gain Parameter
 if nargin < 3
     kp = 4.5e-3;
 end
 
 % Time span (sec)
-p.simDur = 5;
+p.simDur = 2;
 
 % Maximum step size of simulation (s)
 p.maxStep   = 1e-1;
 
 % Relative tolerence of the simulation
 p.rel_tol = 1e-4;
+
 
 %% Morphological and mechanical parameters
 % Scaling relations come from McHenry & Lauder (2006)
@@ -74,10 +76,14 @@ p.predX = 0;                         % (m)
 p.predY = 0;                         % (m)
 
 % Pred initial heading
-p.theta = 0*pi/180;                  % (rad)
+p.theta = 45*pi/180;                  % (rad)
 
 % Distance threshold
 p.dThresh = 0.5 * p.bodyL;           % (m)
+
+% Initial speed                      % (m/s) 
+p.U0 = 0.1;
+
 
 %% Caudal fin parameters
 
@@ -112,11 +118,13 @@ p.psi       = 0*pi/180;
 p.cD_parl   = 0.3;
 p.cD_perp   = 0.1;
 
+
 %% Global variables declared
 % These variables are passed to the governing function during the
 % simulation
 
 % global s
+
 
 %% Scale input parameter values for numerical stability
 % All parameters used by the model are rescaled, made dimensionless, and
@@ -166,10 +174,14 @@ s.simDur    = p.simDur  * sT;
 s.maxStep   = p.maxStep * sT;
 s.tailFreq  = p.tailFreq / sT;
 
+% Kinematics
+s.U0        = p.U0 * sL / sT;
+
 % Indicator variable for capture
 s.capture = 0;
 
 capInd    = 0;
+
 
 %% Controller parameters
 
@@ -201,7 +213,8 @@ opts = odeset('Events',@turnEvents,'Refine',refine,'RelTol', s.rel_tol);
 tspan = [0 s.simDur];
 
 % Initial conditions in the form: [x, x', y, y', theta, theta']
-init = [s.predX, 1.1*sL, s.predY, 0.0*sL, s.theta, 0];
+%init = [s.predX, 1.1*sL, s.predY, 0.0*sL, s.theta, 0];
+init = [s.predX, s.U0*cos(s.theta), s.predY, s.U0*sin(s.theta), s.theta, 0];
 
 % Get initial position of fin (saved in 's' structure)
 [s, ~,~,~] = fin_kine(s,init,tspan(1));
@@ -327,6 +340,7 @@ sol.params  = s;
 % Clear others
 % clear t y tspan init s sT sL sM
 
+
 %% Plot solutions
 
 close all
@@ -349,6 +363,7 @@ if plotOn
     hold on, plot(p.preyX,p.preyY,'or'), hold off
     ylabel('y position')
     xlabel('x position')
+    axis equal 
     
     % Plot heading (derived from velocity)
     heading = atan2(sol.dy,sol.dx);
