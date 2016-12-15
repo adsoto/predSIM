@@ -36,7 +36,7 @@ end
 p.simDur = 2;
 
 % Maximum step size of simulation (s)
-p.maxStep   = 1e-1;
+p.maxStep   = 1e-2;
 
 % Relative tolerence of the simulation
 p.rel_tol = 1e-4;
@@ -262,12 +262,12 @@ init = [s.predX, s.U0*cos(s.theta0), s.predY, s.U0*sin(s.theta0), s.theta0, 0];
 % Get initial position of fin (saved in 's' structure)
 %[s,~] = fin_kine(s,init,tspan(1));
 
-% Initial conditions in the form: [x, x', y, y', theta, theta',xFin,yFin]
-%init = [init, s.finPos(1), s.finPos(2)]';
-init = [init, 0, 0, 0, 0]';
-
 % Distance from body COM to fin quarter-chord point
 s.d_bodyfin = 0.7*s.bodyL+s.pedL+0.25*s.finL;
+
+% Initial conditions in the form: [x, x', y, y', theta, theta',xFin,yFin]
+%init = [init, s.finPos(1), s.finPos(2)]';
+init = [init, -s.d_bodyfin*cos(s.theta0), -s.d_bodyfin*sin(s.theta0)]';
 
 % Initial distance to prey
 [~,~,distInit] = controlParams(init);
@@ -305,7 +305,7 @@ while ~s.capture
     % Simulation period for beat
     tspan(1,2) = tspan(1) + 1/s.tailFreq; 
     
-    % Solve ODE (during fin oscillation,1 sec)
+    % Solve ODE (during fin oscillation, 1 sec)
     [t,y,te,ye,ie] = ode15s(@(t,y) predSIM(t,y,s),...
         tspan, init, opts);%[tspan(1),tspan(1)+1], init, opts);
       
