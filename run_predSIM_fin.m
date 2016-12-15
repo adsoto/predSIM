@@ -70,9 +70,12 @@ p.SA    = surfA * 10^-6;                % (m^2)
 % Body moment of inertia---for a solid ellipsoid about z-axis---(kg m^2)
 p.bodyI = (p.mass/5) * (p.bodyL^2 + p.bodyW^2) + p.mass*(0.2*p.bodyL)^2;
 
+%p.bodyI = p.bodyI/10;
+
 % Drag coefficent for coasting zebrafish (dimensionless)
-cDrag   = 1.44E2 * bodyL^(-2.34);
-p.cDrag = cDrag * 10^-3;
+%cDrag   = 1.44E2 * bodyL^(-2.34);
+%p.cDrag = cDrag * 10^-3;
+p.cDrag = 0.07;
 
 % Lift coefficient of the tail
 p.cLift  = 2*pi;
@@ -98,7 +101,7 @@ p.U0 = 0.01;
 %p.beatSpd = 0.02;
 
 % Max amplitude of tail heaving (rad)
-p.maxHeave = pi/4;
+p.maxHeave = 60 * pi/180;
 
 
 %% Caudal fin parameters
@@ -405,34 +408,45 @@ sol.params  = s;
 
 if plotForce
    
-    subplot(4,1,1)
+    subplot(5,1,1)
     plot(sol.t,sol.heave.*180/pi,'-',sol.t,sol.pitch.*180/pi,'-')
     xlabel('t (s)')
     ylabel('Tail angle (deg)')
     legend('h','p')
+    grid on
        
-    subplot(4,1,2)
+    subplot(5,1,2)
     plot(sol.t,sol.lift(:,1).*1000,'-',sol.t,sol.lift(:,2).*1000,'-')                    
     xlabel('t (s)')
     ylabel('Thrust (mN)')
     legend('x','y')
+    grid on
     
-    subplot(4,1,3)
+    subplot(5,1,3)
     plot(sol.t,sol.theta.*180/pi,'-')                    
     xlabel('t (s)')
     ylabel('Heading (deg)')
+    grid on
 
-    subplot(4,1,4)
+    subplot(5,1,4)
     plot(sol.t,sol.x.*100,'-',sol.t,sol.y.*100,'-')                    
     xlabel('t (s)')
     ylabel('Position (cm)')
     legend('x','y')
+    grid on
     
-%     % Trajectory
-%     figure;
-%     plot(sol.x.*100,sol.y.*100,'-',sol.x(1).*100,sol.y(1).*100,'o')
-%     axis equal
-%     xlabel('x (cm)'); ylabel('y (cm)')
+    subplot(5,1,5)
+    plot(sol.t,sol.dx.*100,'-',sol.t,sol.dy.*100,'-')                    
+    xlabel('t (s)')
+    ylabel('Speed (cm/s)')
+    legend('x','y')
+    grid on
+    
+    % Trajectory
+    figure;
+    plot(sol.x.*100,sol.y.*100,'-',sol.x(1).*100,sol.y(1).*100,'o')
+    axis equal
+    xlabel('x (cm)'); ylabel('y (cm)')
 end
 
 
