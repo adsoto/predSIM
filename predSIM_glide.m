@@ -7,42 +7,43 @@ function dy = predSIM_glide(t,y,s)
 %
 % The input variable 's' is a structure with parameter values
 
-% Modified tail kinematics during glide (tail doesn't move)
-f = s;
-f.pitch0 = 0;
-f.h0 = 0;
+% Unpack state variables
+Vbod_x = y(2);
+Vbod_y = y(4);
+theta  = y(5);
+dTheta = y(6);
+pitch  = y(7);
+heave  = y(8);
 
-% Get speed of fin
-%[f,lift,torque,finVel] = fin_kine(f,y,t);
+% Components of drag on body
+drag_x      = - 0.5 * s.cDrag * s.rho * s.SA * abs(Vbod_x) * Vbod_x;
+drag_y      = - 0.5 * s.cDrag * s.rho * s.SA * abs(Vbod_y) * Vbod_y;
 
-% Update fin position
-%s.finPos = f.finPos;
-%s.finPos_body = f.finPos_body;
-
-% Components of drag
-drag_x      = - 0.5*s.cDrag*s.rho*s.SA*(sqrt(y(2)^2 + y(4)^2))*y(2);
-drag_y      = - 0.5*s.cDrag*s.rho*s.SA*(sqrt(y(2)^2 + y(4)^2))*y(4);
-drag_theta  = - s.SA*s.rho*y(6)*abs(y(6));
+% Viscous drag that resists rotation
+drag_theta  = - s.cDrag_rot * (s.bodyL/2)^3 * s.visc * dTheta^2;
+% drag_theta  = - s.SA*s.rho*y(6)*abs(y(6));
 % drag_theta  = - 0.5*s.cDrag_rot*y(6)*abs(y(6));
 
 % Preallocate derivative vector for system of equations
 dy = zeros(8,1);
 
-% Equations for x-coordinate 
-dy(1) = y(2);
+% x-velocity of body
+dy(1) = Vbod_x;
+
+% x-acceleration of body
 dy(2) = (drag_x) ./ s.mass;
 
-% Equations for y-coordinate 
+% y-velocity of body
 dy(3) = y(4);
+
+% y-acceleration of body
 dy(4) = (drag_y) ./ s.mass;
 
-% Equations for theta (assume COM of body is anterior to its midpoint)
-dy(5) = y(6);
-dy(6) = (drag_theta) ./ (s.bodyI);
+% Rate of body rotation (assume COM of body is anterior to its midpoint)
+dy(5) = dTheta;
 
-% % Fin velocity (so that fin position is returned by the solution)
-% dy(7) = finVel(:,1);
-% dy(8) = finVel(:,2);
+% Body rotational acceleration
+dy(6) = (drag_theta) ./ (s.bodyI);
 
 % Rate of change in fin pitch 
 dy(7) = 0;

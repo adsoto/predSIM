@@ -16,8 +16,8 @@ plotOn = 1;
 
 % Prey initial position (from input)
 if nargin < 2
-    p.preyX = 0.1;                       % (m)
-    p.preyY = 0.1;                      % (m)
+    p.preyX = 1.0;                      % (m)
+    p.preyY = 0.0;                      % (m)
 else
     p.preyX = xPrey;
     p.preyY = yPrey;
@@ -33,7 +33,7 @@ end
 p.simDur = 2;
 
 % Maximum step size of simulation (s)
-p.maxStep   = 1e-1;
+p.maxStep   = 1e-2;
 
 % Relative tolerence of the simulation
 p.rel_tol = 1e-4;
@@ -83,7 +83,7 @@ p.predX = 0;                         % (m)
 p.predY = 0;                         % (m)
 
 % Pred initial heading
-p.theta0 = 45*pi/180;                  % (rad)
+p.theta0 = 15*pi/180;                % (rad)
 
 % Distance threshold
 p.dThresh = 0.5 * p.bodyL;           % (m)
@@ -95,7 +95,7 @@ p.U0 = 0.1;
 %p.beatSpd = 0.02;
 
 % Max amplitude of tail heaving (rad)
-p.maxHeave = pi/4;
+p.maxHeave = pi/6;
 
 
 %% Caudal fin parameters
@@ -252,12 +252,12 @@ init = [s.predX, s.U0*cos(s.theta0), s.predY, s.U0*sin(s.theta0), s.theta0, 0];
 % Get initial position of fin (saved in 's' structure)
 %[s,~] = fin_kine(s,init,tspan(1));
 
-% Initial conditions in the form: [x, x', y, y', theta, theta',xFin,yFin]
-%init = [init, s.finPos(1), s.finPos(2)]';
-init = [init, 0, 0]';
-
 % Distance from body COM to fin quarter-chord point
 s.d_bodyfin = 0.7*s.bodyL+s.pedL+0.25*s.finL;
+
+% Initial conditions in the form: [x, x', y, y', theta, theta',xFin,yFin]
+%init = [init, s.finPos(1), s.finPos(2)]';
+init = [init, -s.d_bodyfin*cos(s.theta0), -s.d_bodyfin*sin(s.theta0)]';
 
 % Initial distance to prey
 [~,~,distInit] = controlParams(init);
@@ -291,9 +291,9 @@ while ~s.capture
     s = gen_kinematics(s);
     
     
-    % Solve ODE (during fin oscillation,1 sec)
+    % Solve ODE (during fin oscillation, 1 sec)
     [t,y,te,ye,ie] = ode15s(@(t,y) predSIM(t,y,s),...
-        tspan, init, opts);%[tspan(1),tspan(1)+1], init, opts);
+        [tspan(1),tspan(1)+1], init, opts);%tspan, init, opts);%
     
     
     % Accumulate output.  
@@ -447,7 +447,7 @@ end
         value       = [dThresh; rotVel];
         
         % stop the integration if either event is detected (set both to 1)
-        isterminal  = [1; 1]; 
+        isterminal  = [1; 0]; 
         
         % zero can be approached from either direction for distance
         % threshold and negative direction (decreasing) for rot. velocity
