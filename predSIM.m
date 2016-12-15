@@ -23,10 +23,10 @@ pitch  = y(7);
 heave  = y(8);
 
 % Current rate of pitch
-d_prime = differentiate(s.fPitch,tBeat);
+[d_prime,d_prime2] = differentiate(s.fPitch,tBeat);
 
 % Current rate of heave
-h_prime = differentiate(s.fHeave,tBeat);
+[h_prime,h_prime2] = differentiate(s.fHeave,tBeat);
 
 % Components of drag on body
 drag_x      = - 0.5 * s.cDrag * s.rho * s.SA * abs(Vbod_x) * Vbod_x;
@@ -68,6 +68,12 @@ dy(7) = d_prime;
 
 % Rate of change in fin heave
 dy(8) = h_prime;
+
+% Acceleration of fin pitch
+dy(9) = d_prime2;
+
+% Acceleration of heaving
+dy(10) = h_prime2;
 
 end
 

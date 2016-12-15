@@ -50,6 +50,12 @@ dy(7) = 0;
 % Rate of change in fin heave
 dy(8) = 0;
 
+% Acceleration of fin pitch
+dy(9) = 0;
+
+% Acceleration of heaving
+dy(10) = 0;
+
 end
 
 

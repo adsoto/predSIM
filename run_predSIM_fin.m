@@ -12,7 +12,10 @@ function [p,sol] = run_predSIM_fin(xPrey,yPrey,kp)
 %% Simulation Parameters 
 
 % Turn on figures
-plotOn = 1;
+plotOn = 0;
+
+% Plot force data
+plotForce = 1;
 
 % Prey initial position (from input)
 if nargin < 2
@@ -83,13 +86,13 @@ p.predX = 0;                         % (m)
 p.predY = 0;                         % (m)
 
 % Pred initial heading
-p.theta0 = 45*pi/180;                  % (rad)
+p.theta0 = 0*pi/180;                  % (rad)
 
 % Distance threshold
 p.dThresh = 0.5 * p.bodyL;           % (m)
 
 % Initial speed                      % (m/s) 
-p.U0 = 0.1;
+p.U0 = 0.01;
 
 % Speed of tail beat (m/s)
 %p.beatSpd = 0.02;
@@ -122,7 +125,10 @@ p.h0        = 0*pi/180;
 p.pitch0    = 15*pi/180;
 
 % Tail-beat frequency (Hz)
-p.tailFreq  = 1;
+p.tailFreq  = 6;
+
+% Glide duration (s)
+p.glideDur = 0.4;
 
 % Phase lag (pitch leads heave) (rad)
 p.psi       = 0*pi/180;
@@ -197,6 +203,7 @@ s.tailFreq  = p.tailFreq / sT;
 s.U0        = p.U0 * sL / sT;
 %s.beatSpd   = p.beatSpd * sL / sT;
 s.maxHeave  = p.maxHeave;
+s.glideDur  = p.glideDur * sT;
 
 % Indicator variable for capture
 s.capture = 0;
@@ -243,7 +250,7 @@ opts = odeset('Events',@turnEvents,'Refine',refine,'RelTol', s.rel_tol);
 opts2 = odeset('Events',@turnEvents2,'Refine',refine,'RelTol', s.rel_tol);
 
 % Time span for simulation
-tspan = [0 s.simDur];
+%tspan = [0 s.simDur];
 
 % Initial conditions in the form: [x, x', y, y', theta, theta']
 %init = [s.predX, 1.1*sL, s.predY, 0.0*sL, s.theta, 0];
@@ -254,7 +261,7 @@ init = [s.predX, s.U0*cos(s.theta0), s.predY, s.U0*sin(s.theta0), s.theta0, 0];
 
 % Initial conditions in the form: [x, x', y, y', theta, theta',xFin,yFin]
 %init = [init, s.finPos(1), s.finPos(2)]';
-init = [init, 0, 0]';
+init = [init, 0, 0, 0, 0]';
 
 % Distance from body COM to fin quarter-chord point
 s.d_bodyfin = 0.7*s.bodyL+s.pedL+0.25*s.finL;
@@ -271,6 +278,8 @@ yeout   = [];
 ieout   = [];
 phiPre  = phi;
 phiPost = [];
+
+tspan(1) = 0;
  
 while ~s.capture
 
@@ -285,17 +294,18 @@ while ~s.capture
     
     % Speed of tail beat
     %TODO: Make this a control parameter
-    s.beatSpd = (s.bodyL * s.tailFreq)*2;
+    s.beatSpd = (s.bodyL * s.tailFreq)*4;
     
     % Generate fin kinematics for tail beat 
     s = gen_kinematics(s);
     
+    % Simulation period for beat
+    tspan(1,2) = tspan(1) + 1/s.tailFreq; 
     
     % Solve ODE (during fin oscillation,1 sec)
     [t,y,te,ye,ie] = ode15s(@(t,y) predSIM(t,y,s),...
         tspan, init, opts);%[tspan(1),tspan(1)+1], init, opts);
-    
-    
+      
     % Accumulate output.  
     nt      = length(t);
     tout    = [tout; t(2:nt)];
@@ -307,8 +317,9 @@ while ~s.capture
     % Set the new initial conditions.
     init = y(nt,:);
     
-    % Set the new start time
+    % Set the new simulation period for glide
     tspan(1) = t(nt);
+    tspan(2) = t(nt) + s.glideDur;
     
     % Bearing angle after a turn
     [~,phiTurn,~] = controlParams(init); 
@@ -325,7 +336,7 @@ while ~s.capture
     
     % Solve ODE (during glide for 0.5 sec)
     [t,y,te,ye,ie] = ode45(@(t,y) predSIM_glide(t,y,s),...
-        [t(nt),t(nt)+0.5], init, opts2);
+        tspan, init, opts2);
     
     % Accumulate output.
     nt      = length(t);
@@ -357,7 +368,7 @@ while ~s.capture
     end
     
     % Check time interval
-    if t(nt)>=tspan(2)
+    if t(nt)>=s.simDur
         break
     end
     
@@ -371,8 +382,10 @@ sol.theta   = yout(:,5);
 sol.dx      = yout(:,2) ./ sL   .* sT;
 sol.dy      = yout(:,4) ./ sL   .* sT;
 sol.dtheta  = yout(:,6)         .* sT;
-sol.finX    = yout(:,7) ./ sL;
-sol.finY    = yout(:,8) ./ sL;
+sol.pitch   = yout(:,7);
+sol.heave   = yout(:,8);
+sol.dpitch  = yout(:,9)         .* sT;
+sol.dheave  = yout(:,10)        .* sT;
 sol.phiPre  = phiPre;
 sol.phiPost = phiPost;
 sol.distInit= distInit  ./ sL;
@@ -380,13 +393,52 @@ sol.turns   = iter;
 sol.capture = capInd;
 sol.params  = s;
 
+% Calculate forces
+[sol.lift,sol.torque] = fin_kine(p,sol.theta,sol.dtheta,sol.pitch,sol.heave,...
+                                   sol.dpitch,sol.dheave,sol.dx,sol.dy);
+
 % Clear others
 % clear t y tspan init s sT sL sM
 
 
+%% Plot force data
+
+if plotForce
+   
+    subplot(4,1,1)
+    plot(sol.t,sol.heave.*180/pi,'-',sol.t,sol.pitch.*180/pi,'-')
+    xlabel('t (s)')
+    ylabel('Tail angle (deg)')
+    legend('h','p')
+       
+    subplot(4,1,2)
+    plot(sol.t,sol.lift(:,1).*1000,'-',sol.t,sol.lift(:,2).*1000,'-')                    
+    xlabel('t (s)')
+    ylabel('Thrust (mN)')
+    legend('x','y')
+    
+    subplot(4,1,3)
+    plot(sol.t,sol.theta.*180/pi,'-')                    
+    xlabel('t (s)')
+    ylabel('Heading (deg)')
+
+    subplot(4,1,4)
+    plot(sol.t,sol.x.*100,'-',sol.t,sol.y.*100,'-')                    
+    xlabel('t (s)')
+    ylabel('Position (cm)')
+    legend('x','y')
+    
+%     % Trajectory
+%     figure;
+%     plot(sol.x.*100,sol.y.*100,'-',sol.x(1).*100,sol.y(1).*100,'o')
+%     axis equal
+%     xlabel('x (cm)'); ylabel('y (cm)')
+end
+
+
 %% Plot solutions
 
-close all
+%close all
 
 if plotOn
     
@@ -427,7 +479,7 @@ if plotOn
 end
 
 % -----------------------------------------------------------------------
-% Nested functions -- problem parameters provided by the outer function.
+%% Nested functions -- problem parameters provided by the outer function.
 %
     function [value,isterminal,direction] = turnEvents(t,y)
         % Locate the time when a turn is completed or when the distance
@@ -443,11 +495,15 @@ end
         % look at absolute value so that crossings are from negative direc.
         rotVel      = abs(y(6)) - 1e-2;  
         
+        %TODO: Fix this.  It's shutting off the solver in the middle of a beat
+        
         % Value contains both events that are checked for zero crossings
         value       = [dThresh; rotVel];
         
         % stop the integration if either event is detected (set both to 1)
-        isterminal  = [1; 1]; 
+        %isterminal  = [1; 1]; 
+        isterminal = [0; 0];
+           
         
         % zero can be approached from either direction for distance
         % threshold and negative direction (decreasing) for rot. velocity
@@ -474,7 +530,8 @@ end
         value       = [dThresh; rotVel];
         
         % stop the integration if either event is detected (set both to 1)
-        isterminal  = [1; 0]; 
+        %isterminal  = [1; 0]; 
+        isterminal = [0; 0];
         
         % zero can be approached from either direction for distance
         % threshold and negative direction (decreasing) for rot. velocity
