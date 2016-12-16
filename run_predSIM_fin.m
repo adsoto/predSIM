@@ -57,7 +57,7 @@ p.bodyL = bodyL * 10^-3;                % (m)
 
 % Body width (mm)
 bodyW   = (6.22e-2) * bodyL^(1.56);
-p.bodyW = bodyW * 10^-3;                % (m)
+p.bodyW = (bodyW * 10^-3)/1.2;                % (m)
 
 % Body mass (g)
 mass    = (4.14E-6) * bodyL^(3.17);
@@ -297,7 +297,7 @@ while ~s.capture
     
     % Speed of tail beat
     %TODO: Make this a control parameter
-    s.beatSpd = (s.bodyL * s.tailFreq)*4;
+    s.beatSpd = (s.bodyL * s.tailFreq)*6;
     
     % Generate fin kinematics for tail beat 
     s = gen_kinematics(s);
@@ -397,8 +397,9 @@ sol.capture = capInd;
 sol.params  = s;
 
 % Calculate forces
-[sol.lift,sol.torque] = fin_kine(p,sol.theta,sol.dtheta,sol.pitch,sol.heave,...
-                                   sol.dpitch,sol.dheave,sol.dx,sol.dy);
+[sol.lift,sol.torque,sol.drag,sol.drag_theta] = ...
+    fin_kine(p,sol.theta,sol.dtheta,sol.pitch,sol.heave,...
+             sol.dpitch,sol.dheave,sol.dx,sol.dy);
 
 % Clear others
 % clear t y tspan init s sT sL sM

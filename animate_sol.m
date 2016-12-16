@@ -1,60 +1,198 @@
-function animate_sol(sol,p)
+function animate_sol(sol,p,save_movie)
 
 
+if nargin < 3
+    save_movie = 0;
+    
+end
 
-num_time = 500;
+% Number of time points (frames)
+num_time = 300;
 
-bod_clr = .8.*[1 1 1];
+% Rate to play exported video
+playrate = 30;
 
-play_interval = 0.01;
+%v.bod_clr = .8.*[1 1 1];
+
+play_interval = 0.001;
 
 % Local coordinates for body
 theta   = linspace(0,2*pi,300)';
-xBodL   = p.bodyL/2 .* cos(theta);
-yBodL   = p.bodyW/2 .* sin(theta);
+v.xBodL   = p.bodyL/2 .* cos(theta);
+v.yBodL   = p.bodyW/2 .* sin(theta);
 %TODO:Fin
 
 
 
 % Time vector
-t = linspace(sol.t(1),sol.t(end),num_time)';
+v.t = linspace(sol.t(1),sol.t(end),num_time)';
 
 % Interpolate all necessary parameters
-x       = interp1(sol.t,sol.x,t);
-y       = interp1(sol.t,sol.y,t);
-theta   = interp1(sol.t,sol.theta,t);
-xFin    = interp1(sol.t,sol.finX,t);
-yFin    = interp1(sol.t,sol.finY,t);
+v.x       = interp1(sol.t,sol.x,v.t);
+v.y       = interp1(sol.t,sol.y,v.t);
+v.theta   = interp1(sol.t,sol.theta,v.t);
+v.h       = interp1(sol.t,sol.heave,v.t);
+v.p       = interp1(sol.t,sol.pitch,v.t);
+v.force   = sqrt(interp1(sol.t,sol.lift(:,1),v.t).^2 + ...
+                 interp1(sol.t,sol.lift(:,2),v.t).^2 );
+v.drag   = sqrt(interp1(sol.t,sol.drag(:,1),v.t).^2 + ...
+                interp1(sol.t,sol.drag(:,2),v.t).^2 );
+         
+%xFin    = interp1(sol.t,sol.finX,t);
+%yFin    = interp1(sol.t,sol.finY,t);
 
 % Range and limits for axes
-rng = max([range(x) range(y)]);
-lims = [min([min(x) min(y)])-p.bodyL min([min(x) min(y)])+rng+p.bodyL];
+%rng = max([range(x) range(y)]);
+%lims = [min([min(x) min(y)])-p.bodyL min([min(x) min(y)])+rng+p.bodyL];
 
-f = figure('DoubleBuffer','on');
+f = figure('DoubleBuffer','on','Visible','on','Color','w');
+
+% Plot first frame
+plot_body(v,1,p)
+hold on
+
+% Plot last fame
+plot_body(v,num_time,p)
+hold off
+axis equal
+
+% Save axis limits
+xL = xlim; yL = ylim;
+
+% Make some space
+xL(1) = xL(1) - range(xL)/10;
+xL(2) = xL(2) + range(xL)/10;
+yL(1) = yL(1) - range(xL)/10;
+yL(2) = yL(2) + range(xL)/10;
+
+% Prompt for where to save movie            
+if save_movie
+    [FileName,PathName] = uiputfile;
+    if isempty(FileName)
+        return
+    end
+    outputVideo = VideoWriter(fullfile(PathName,[FileName '.m4v']));
+    outputVideo.FrameRate = playrate;
+    open(outputVideo)
+end
+      
 
 % Loop thru time
-for i = 1:length(t)
+for i = 1:length(v.t)
     
-    % Current rotation matrix
-    R = local_system([0 0],[cos(theta(i)) sin(theta(i))]);
+    % Make figure visible
+    set(f,'Visible','on')
     
-    [xBodG,yBodG] = local_to_global([x(i) y(i)],R,xBodL,yBodL);
+    % Plot current frame
+    plot_body(v,i,p)
     
-    h = fill(xBodG,yBodG,bod_clr);
-    set(h,'EdgeColor','none')
-    axis square
-    xlim(lims);ylim(lims)
+    % Set axes
+    xlim(xL);ylim(yL)
     
+    if save_movie
+        % Grab frame
+        img = getframe(f);
+        
+        writeVideo(outputVideo,img)
+    end
+    
+    % Wait before next frame
     pause(play_interval);
-    ttt=3;
+end
+
+if save_movie
+    close(outputVideo)
+    close(f)
 end
 
 
 
 
+function plot_body(v,frame,p)
+% Current rotation matrix
+R = local_system([0 0],[cos(v.theta(frame)) sin(v.theta(frame))]);
+    
+x     = v.x(frame);
+y     = v.y(frame);
+theta = v.theta(frame);
+heave = v.h(frame);
+pitch = v.p(frame);
+force = v.force(frame);
+drag  = v.drag(frame);
+
+% Colormap for tail
+cmap = colormap('parula');
+
+% Color position for tail force
+cpos = force./max([max(v.force) max(v.drag)]) * size(cmap,1);
+
+tailclr = [interp1(1:size(cmap,1),cmap(:,1),cpos) ...
+           interp1(1:size(cmap,1),cmap(:,2),cpos) ...
+           interp1(1:size(cmap,1),cmap(:,3),cpos)];
+if max(isnan(tailclr))
+    tailclr = cmap(1,:);
+end
+
+% Color position for body
+cpos = drag./max([max(v.force) max(v.drag)]) * size(cmap,1);
+
+bodclr = [interp1(1:size(cmap,1),cmap(:,1),cpos) ...
+           interp1(1:size(cmap,1),cmap(:,2),cpos) ...
+           interp1(1:size(cmap,1),cmap(:,3),cpos)];
+if max(isnan(bodclr))
+    bodclr = cmap(1,:);
+end
+       
+% Transform body in global FOR
+[xBodG,yBodG] = local_to_global([v.x(frame) v.y(frame)],R,v.xBodL,v.yBodL);
+    
+
+% Current position of fin quarter-chord point
+% finPos(1,1) = x - 0.7*p.bodyL*cos(theta) ...
+%                  - p.pedL*cos(theta+heave) ...
+%                  - 0.25*p.finL*cos(theta+heave+pitch);
+% finPos(1,2) = y - 0.7*p.bodyL*sin(theta) ...
+%                  - p.pedL*sin(theta+heave) ...
+%                  - 0.25*p.finL*sin(theta+heave+pitch);
+
+% Fin leading edge coordinates             
+leadEdge(1,1) = x - 0.7*p.bodyL*cos(theta) ...
+                 - p.pedL*cos(theta+heave); 
+leadEdge(1,2) = y - 0.7*p.bodyL*sin(theta) ...
+                  - p.pedL*sin(theta+heave); 
+
+% Fin trailing edge coordinates               
+trailEdge(1,1) = x - 0.7*p.bodyL*cos(theta) ...
+                   - p.pedL*cos(theta+heave) ...
+                   - p.finL*cos(theta+heave+pitch);
+trailEdge(1,2) = y - 0.7*p.bodyL*sin(theta) ...
+                   - p.pedL*sin(theta+heave) ...
+                   - p.finL*sin(theta+heave+pitch);              
+
+% Draw body    
+h = fill(xBodG,yBodG,bodclr);
+set(h,'EdgeColor','none')
+hold on
 
 
+h = plot([leadEdge(1) trailEdge(1)],[leadEdge(2) trailEdge(2)],'k-');
+set(h,'LineWidth',8,'Color',tailclr);
+hold off
 
+% Colorbar
+%h = colorbar;
+%set(h,'TickLabels','','Box','off')
+
+% Axes properties
+set(gca,'Color','w','XColor','w','YColor','w')
+set(gca,'Position',[0 0 1 1])
+%set(gca,'Units','Pixels')
+%set(gcf,'Units','Pixels')
+
+title(['t = ' num2str(v.t(frame),'%10.2f\n')],'Color',.5.*[1 1 1])
+
+%     axis e
+%     xlim(lims);ylim(lims)
 
 
 function R = local_system(origin,rost)
