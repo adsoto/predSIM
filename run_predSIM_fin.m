@@ -29,7 +29,7 @@ end
 
 % Gain Parameter
 if nargin < 3
-    kp = 4.5e-3;
+    p.kP = 3.5e1;
 end
 
 % Time span (sec)
@@ -55,9 +55,9 @@ p.visc = 8.9e-4;
 bodyL   = 10^1.5;
 p.bodyL = bodyL * 10^-3;                % (m)
 
-% Body width (mm)
-bodyW   = (6.22e-2) * bodyL^(1.56);
-p.bodyW = (bodyW * 10^-3)/1.2;                % (m)
+% Body width (mm), based on f_low 
+bodyW   = (6.22e-2) * bodyL^(1.26);
+p.bodyW = (bodyW * 10^-3);              % (m)
 
 % Body mass (g)
 mass    = (4.14E-6) * bodyL^(3.17);
@@ -89,7 +89,7 @@ p.predX = 0;                         % (m)
 p.predY = 0;                         % (m)
 
 % Pred initial heading
-p.theta0 = 0*pi/180;                  % (rad)
+p.theta0 = 0*pi/180;                 % (rad)
 
 % Distance threshold
 p.dThresh = 0.5 * p.bodyL;           % (m)
@@ -101,7 +101,10 @@ p.U0 = 0.01;
 %p.beatSpd = 0.02;
 
 % Max amplitude of tail heaving (rad)
-p.maxHeave = 60 * pi/180;
+p.maxHeave = 90 * pi/180;
+
+% Coefficient for solution during glide (m)
+p.cGlide = (2*p.mass)/(p.cDrag * p.SA * p.rho);
 
 
 %% Caudal fin parameters
@@ -110,7 +113,7 @@ p.maxHeave = 60 * pi/180;
 p.finL      = p.bodyL * 0.19 ;
 
 % Peduncle length (m); estimate based on observation & anatomy
-p.pedL      = p.bodyL * 0.12;
+p.pedL      = p.bodyL * 0.15;
 
 % Fin height (m); estimate based on literature (Plaut, 2000)
 p.finH      = p.bodyL * 0.18;
@@ -119,7 +122,10 @@ p.finH      = p.bodyL * 0.18;
 p.finSpan   = p.finH^2;
 
 % Fin surface area (m^2), estimate based on literature (Plaut, 2000)
-p.finA      = p.finSpan / 2.05; 
+% p.finA      = p.finSpan / 2.05; 
+
+% Fin surface area from McHenry & Lauder (2006)
+p.finA     = (9.19e-2 * bodyL.^2.25) * 10^-6; % (m^2)
 
 % Heave amplitude (rad)
 p.h0        = 0*pi/180;
@@ -190,6 +196,7 @@ s.dThresh   = p.dThresh * sL;
 s.finL      = p.finL    * sL;
 s.pedL      = p.pedL    * sL;
 s.finA      = p.finA    * sL^2;
+s.cGlide    = p.cGlide  * sL;
 
 % Mechanical properties
 s.mass      = p.mass    * sM;
@@ -201,6 +208,7 @@ s.visc      = p.visc    * sP * sT;
 s.simDur    = p.simDur  * sT;
 s.maxStep   = p.maxStep * sT;
 s.tailFreq  = p.tailFreq / sT;
+s.kP        = p.kP /sT;
 
 % Kinematics
 s.U0        = p.U0 * sL / sT;
@@ -235,8 +243,8 @@ if phi==0
     phi = pi/10000;
 end
 
-% Direction of the turn (1=CCW, -1=CW)
-turnDirec = sign(phi);
+% Direction of the turn (-1=CCW, 1=CW)
+turnDirec = -sign(phi);
 
 % Set turn direction parameter
 s.turnDirec = turnDirec;
@@ -256,8 +264,7 @@ opts2 = odeset('Events',@turnEvents2,'Refine',refine,'RelTol', s.rel_tol);
 %tspan = [0 s.simDur];
 
 % Initial conditions in the form: [x, x', y, y', theta, theta']
-%init = [s.predX, 1.1*sL, s.predY, 0.0*sL, s.theta, 0];
-init = [s.predX, s.U0*cos(s.theta0), s.predY, s.U0*sin(s.theta0), s.theta0, 0, 0, 0];
+init = [s.predX, s.U0*cos(s.theta0), s.predY, s.U0*sin(s.theta0), s.theta0, 0];
 
 % Get initial position of fin (saved in 's' structure)
 %[s,~] = fin_kine(s,init,tspan(1));
@@ -265,9 +272,9 @@ init = [s.predX, s.U0*cos(s.theta0), s.predY, s.U0*sin(s.theta0), s.theta0, 0, 0
 % Distance from body COM to fin quarter-chord point
 s.d_bodyfin = 0.7*s.bodyL+s.pedL+0.25*s.finL;
 
-% Initial conditions in the form: [x, x', y, y', theta, theta',xFin,yFin]
-%init = [init, s.finPos(1), s.finPos(2)]';
-init = [init, -s.d_bodyfin*cos(s.theta0), -s.d_bodyfin*sin(s.theta0)]';
+% Initial conditions in the form: 
+% [x, x', y, y', theta, theta',pitch,heave,pitch',heave']
+init = [init, 0, 0, 0, 0]';
 
 % Initial distance to prey
 [~,~,distInit] = controlParams(init);
@@ -292,22 +299,22 @@ while ~s.capture
     % Current time 
     s.tCurr = tspan(1);
     
-    % Set turn direction parameter
+    % Set turn direction parameter (minus sign gives correct torque direc)
     s.turnDirec = turnDirec;
     
     % Speed of tail beat
     %TODO: Make this a control parameter
-    s.beatSpd = (s.bodyL * s.tailFreq)*6;
-    
+    s.beatSpd = s.kP * phi;
+%     s.beatSpd = (s.bodyL * s.tailFreq)*6;
+ 
     % Generate fin kinematics for tail beat 
     s = gen_kinematics(s);
     
     % Simulation period for beat
     tspan(1,2) = tspan(1) + 1/s.tailFreq; 
     
-    % Solve ODE (during fin oscillation, 1 sec)
-    [t,y,te,ye,ie] = ode15s(@(t,y) predSIM(t,y,s),...
-        tspan, init, opts);%[tspan(1),tspan(1)+1], init, opts);
+    % Solve ODE (during fin oscillation)
+    [t,y,te,ye,ie] = ode15s(@(t,y) predSIM(t,y,s), tspan, init, opts);
       
     % Accumulate output.  
     nt      = length(t);
@@ -319,6 +326,16 @@ while ~s.capture
 
     % Set the new initial conditions.
     init = y(nt,:);
+    
+    % check values of ang. vel.
+    idx = find(abs(y(:,6)) > 1e4);
+    
+    if ~isempty(idx)
+        disp('rotational vel. blowing up')
+    end
+        
+    % reset hd_vel and fin variables to zero for glide
+    init(6:10) = 0;
     
     % Set the new simulation period for glide
     tspan(1) = t(nt);
@@ -337,17 +354,21 @@ while ~s.capture
     else
     end
     
-    % Solve ODE (during glide for 0.5 sec)
-    [t,y,te,ye,ie] = ode45(@(t,y) predSIM_glide(t,y,s),...
-        tspan, init, opts2);
+    % Solve ODE (during glide)
+%     [t,y,te,ye,ie] = ode45(@(t,y) predSIM_glide(t,y,s),tspan, init, opts2);
+
+    % Compute solution during glide
+    [t,y] = simGlide(tspan,init);
     
     % Accumulate output.
     nt      = length(t);
     tout    = [tout; t(2:nt)];
     yout    = [yout; y(2:nt,:)];
-    teout   = [teout; te];          % Events at tstart are never reported.
-    yeout   = [yeout; ye];
-    ieout   = [ieout; ie];
+    
+    % TO DO: Figure out how to include distance threshold detection 
+%     teout   = [teout; te];          % Events at tstart are never reported.
+%     yeout   = [yeout; ye];
+%     ieout   = [ieout; ie];
     
     % Set the new initial conditions.
     init = y(nt,:)';
@@ -359,7 +380,7 @@ while ~s.capture
     [turnDirec,phi,dist] = controlParams(init); 
     
     % Store bearing angle after a glide
-%     phiPre = [phiPre; phi];
+    phiPre = [phiPre; phi];
     
     % check for a distance threshold event (ieout will contain a 1)
     distEvnt = ieout<2;
@@ -394,7 +415,9 @@ sol.phiPost = phiPost;
 sol.distInit= distInit  ./ sL;
 sol.turns   = iter;
 sol.capture = capInd;
+sol.preyPos = [p.preyX,p.preyY];
 sol.params  = s;
+
 
 % Calculate forces
 [sol.lift,sol.torque,sol.drag,sol.drag_theta] = ...
@@ -408,14 +431,18 @@ sol.params  = s;
 %% Plot force data
 
 if plotForce
-   
+    
+    figure;
+    
+    % tail angle
     subplot(5,1,1)
     plot(sol.t,sol.heave.*180/pi,'-',sol.t,sol.pitch.*180/pi,'-')
     xlabel('t (s)')
     ylabel('Tail angle (deg)')
     legend('h','p')
     grid on
-       
+    
+    % thrust
     subplot(5,1,2)
     plot(sol.t,sol.lift(:,1).*1000,'-',sol.t,sol.lift(:,2).*1000,'-')                    
     xlabel('t (s)')
@@ -423,12 +450,14 @@ if plotForce
     legend('x','y')
     grid on
     
+    % heading angle
     subplot(5,1,3)
     plot(sol.t,sol.theta.*180/pi,'-')                    
     xlabel('t (s)')
     ylabel('Heading (deg)')
     grid on
 
+    % position
     subplot(5,1,4)
     plot(sol.t,sol.x.*100,'-',sol.t,sol.y.*100,'-')                    
     xlabel('t (s)')
@@ -436,6 +465,7 @@ if plotForce
     legend('x','y')
     grid on
     
+    % speed
     subplot(5,1,5)
     plot(sol.t,sol.dx.*100,'-',sol.t,sol.dy.*100,'-')                    
     xlabel('t (s)')
@@ -517,7 +547,7 @@ end
         
         % stop the integration if either event is detected (set both to 1)
         %isterminal  = [1; 1]; 
-        isterminal = [0; 0];
+        isterminal = [1; 0];
            
         
         % zero can be approached from either direction for distance
@@ -546,7 +576,7 @@ end
         
         % stop the integration if either event is detected (set both to 1)
         %isterminal  = [1; 0]; 
-        isterminal = [0; 0];
+        isterminal = [1; 0];
         
         % zero can be approached from either direction for distance
         % threshold and negative direction (decreasing) for rot. velocity
@@ -561,16 +591,14 @@ end
         % the control input that computes the required thrust parameters
         %
         % INPUT: y contains the current value of all state variables
-        
-%         global s
 
         % Heading angle (velocity direction)
         heading = y(5);
 %         heading = atan2(y(4),y(2));
         
-        % Vector from pred to prey (range vector)
-        rangeX = s.preyX - (y(1) + (0.3*s.bodyL)*cos(heading));
-        rangeY = s.preyY - (y(3) + (0.3*s.bodyL)*sin(heading));
+        % Vector from pred rostrum to prey (range vector)
+        rangeX = s.preyX - (y(1) + (0.2*s.bodyL)*cos(heading));
+        rangeY = s.preyY - (y(3) + (0.2*s.bodyL)*sin(heading));
         
         % Distance to prey (scaled units)
         dist = norm([rangeX, rangeY]);
@@ -581,9 +609,46 @@ end
         % Bearing angle
         phi = atan2(sin(alpha - heading), cos(alpha - heading));
         
-        % Direction of the turn (1=CCW, -1=CW)
-        turnDirec = sign(phi);
+        % Direction of the turn (-1=CCW, 1=CW)
+        turnDirec = -sign(phi);
         
+    end
+
+% -----------------------------------------------------------------------
+
+    function [tGlide,y] = simGlide(tspan,y)
+        
+        % Unpack state variables
+        x_Pos  = y(1);
+        Vbod_x = y(2);
+        y_Pos  = y(3);
+        Vbod_y = y(4);
+        theta  = y(5);
+        
+        % Shift time vector to begin at t=0
+        tEnd = tspan(2) - tspan(1);
+        
+        % Time vector during glide
+        tGlide = linspace(0,tEnd)';
+        
+        % Preallocate vector for system of equations
+        y = zeros(length(tGlide),10);
+        
+        % Compute position during glide
+        y(:,1) = s.cGlide .* (log((Vbod_x.*tGlide)./s.cGlide + 1)) + x_Pos;
+        y(:,3) = s.cGlide .* (log((Vbod_y.*tGlide)./s.cGlide + 1)) + y_Pos;
+        
+        % Compute velocity during glide
+        y(:,2) = Vbod_x ./ (Vbod_x * s.cGlide .* tGlide + 1);
+        y(:,4) = Vbod_y ./ (Vbod_y * s.cGlide .* tGlide + 1);
+        
+        % Generate points for other state variables
+        y(:,5) = theta .* ones(length(tGlide),1);
+        y(:,6:10) = repmat(zeros(length(tGlide),1),1,5);
+        
+        % Shift time forward for output
+        tGlide = tGlide + tspan(1);
+         
     end
 
 
@@ -593,7 +658,7 @@ end
 function s = gen_kinematics(s)
 
 % Number of end and center points
-numendpts  = 1000;
+numendpts  = 100;
 numcntrpts = 300;
 
 % Default duty cycle for heaving of tail
@@ -616,6 +681,7 @@ zEndDur = tau/10;
 
 % Duration of beat outward
 pwr_dur = dCycle * (tau-zStartDur-zEndDur);
+
 
 % If the tail cannot move far enough . . .
 if pwr_dur*Vmax > s.maxHeave
@@ -667,18 +733,23 @@ iPwr = (t >= (zStartDur + delay)) & (t<(zStartDur + delay + pwr_dur));
 iRecov = (t>=(zStartDur + delay + pwr_dur)) & (t<(tau-zEndDur+delay));
 
 % Discrete pitch values during power stroke
-p(iPwr) = s.turnDirec * h_amp/2 .* ...
+p(iPwr) = s.turnDirec * (1*h_amp/2) .* ...
     (sawtooth(2*pi*(t(iPwr)-zStartDur-delay)./(2*pwr_dur)-pi/2,0.5));
 
 % Discrete pitch values during recovery stroke
-p(iRecov) = -s.turnDirec * h_amp/2 .* ...
+p(iRecov) = -s.turnDirec * (1*h_amp/2) .* ...
     (sawtooth(2*pi*(t(iRecov)-zStartDur-delay-pwr_dur)./(2*rcvr_dur)-pi/2,0.5));
+
+% h = h_amp/2*sin(2*pi*(s.tailFreq)*t);
+% p = h_amp/4*sin(2*pi*(s.tailFreq)*t + delay);
 
 % Fourier fit to heave data
 s.fHeave = fit(t,h,'fourier8');
+% s.fHeave = fit(t,h,'smoothingspline','SmoothingParam',1 - 3.1e-11);
 
 % Fourier fit to pitch data
 s.fPitch = fit(t,p,'fourier8');
+% s.fPitch = fit(t,p,'smoothingspline','SmoothingParam',1 - 3.1e-11);
 
 % Plot fits
 if 0
@@ -693,6 +764,8 @@ if 0
    xlabel('t');ylabel('p (rad)')
    grid on
 end
+
+
 
 end
 

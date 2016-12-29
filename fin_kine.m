@@ -33,9 +33,6 @@ finPosB(:,1) = - 0.7*s.bodyL*cos(hd_ang) ...
 finPosB(:,2) = - 0.7*s.bodyL*sin(hd_ang) ...
                - s.pedL*sin(hd_ang+heave) ...
                - 0.25*s.finL*sin(hd_ang+heave+pitch);
-        
-% Current position of fin 1/4 chord point (body FOR)
-%fp_body = s.finPos_body;
 
 % Speed of fin in x-direction (interial frame)
 u_parl = x_vel + 0.7*s.bodyL*sin(hd_ang).*hd_vel + ...
@@ -58,7 +55,6 @@ vel_vec = [u_parl, u_perp, zeros(length(u_parl),1)];
 x_prod = cross(vel_vec,unit_f,2);
 
 % Lift 
-% fin_L = (0.5*s.rho*s.cD_parl).*abs((u_perp)).*(u_perp);
 fin_L   = 0.5*s.cLift *s.rho*s.finA .* (cross(x_prod,vel_vec,2));
 
 % Drag

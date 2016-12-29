@@ -53,8 +53,13 @@ hold on
 
 % Plot last fame
 plot_body(v,num_time,p)
-hold off
 axis equal
+
+% Plot prey position
+hold on
+plot(sol.preyPos(1),sol.preyPos(2),'r.','MarkerSize',18)
+hold off
+
 
 % Save axis limits
 xL = xlim; yL = ylim;
@@ -83,8 +88,13 @@ for i = 1:length(v.t)
     % Make figure visible
     set(f,'Visible','on')
     
+    % Plot prey position
+    plot(sol.preyPos(1),sol.preyPos(2),'r.','MarkerSize',18)
+    hold on
+    
     % Plot current frame
     plot_body(v,i,p)
+    hold off
     
     % Set axes
     xlim(xL);ylim(yL)
@@ -176,7 +186,7 @@ hold on
 
 
 h = plot([leadEdge(1) trailEdge(1)],[leadEdge(2) trailEdge(2)],'k-');
-set(h,'LineWidth',8,'Color',tailclr);
+set(h,'LineWidth',4,'Color',tailclr);
 hold off
 
 % Colorbar

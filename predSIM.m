@@ -32,7 +32,7 @@ heave  = y(8);
 [lift,torque,drag,drag_theta] = fin_kine(s,theta,dTheta,pitch,heave,d_prime,h_prime,Vbod_x,Vbod_y);
 
 % Preallocate derivative vector for system of equations
-dy = zeros(8,1);
+dy = zeros(10,1);
 
 % x-velocity of body
 dy(1) = Vbod_x;
@@ -51,10 +51,6 @@ dy(5) = dTheta;
 
 % Body rotational acceleration
 dy(6) = (torque + drag_theta) ./ (s.bodyI);
-
-% Fin velocity (so that fin position is returned by the solution)
-%dy(7) = finVel(:,1);
-%dy(8) = finVel(:,2);
 
 % Rate of change in fin pitch 
 dy(7) = d_prime;
