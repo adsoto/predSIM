@@ -26,21 +26,21 @@ drag_theta  = - s.cDrag_rot * (s.bodyL/2)^3 * s.visc * hd_vel;
 %                        - 0.25*s.finL*sin(hd_ang+heave+pitch);
 
 % Current position of fin quarter-chord point (w.r.t. body COM)
-finPosB(:,1) = - 0.7*s.bodyL*cos(hd_ang) ...
+finPosB(:,1) = - (1-s.bFrac)*s.bodyL*cos(hd_ang) ...
                      - s.pedL*cos(hd_ang+heave) ...
                      - 0.25*s.finL*cos(hd_ang+heave+pitch);
 
-finPosB(:,2) = - 0.7*s.bodyL*sin(hd_ang) ...
+finPosB(:,2) = - (1-s.bFrac)*s.bodyL*sin(hd_ang) ...
                - s.pedL*sin(hd_ang+heave) ...
                - 0.25*s.finL*sin(hd_ang+heave+pitch);
 
 % Speed of fin in x-direction (interial frame)
-u_parl = x_vel + 0.7*s.bodyL*sin(hd_ang).*hd_vel + ...
+u_parl = x_vel + (1-s.bFrac)*s.bodyL*sin(hd_ang).*hd_vel + ...
                  s.pedL*sin(hd_ang+heave).*(hd_vel+h_prime) + ...
                  0.25*s.finL*sin(hd_ang+heave+pitch).*(hd_vel+h_prime+p_prime);
     
 % Speed of fin in y-direction (interial frame)
-u_perp = y_vel - 0.7*s.bodyL*cos(hd_ang).*hd_vel - ...
+u_perp = y_vel - (1-s.bFrac)*s.bodyL*cos(hd_ang).*hd_vel - ...
         s.pedL*cos(hd_ang+heave).*(hd_vel+h_prime) - ...
         0.25*s.finL*cos(hd_ang+heave+pitch).*(hd_vel+h_prime+p_prime);
     
@@ -48,20 +48,31 @@ u_perp = y_vel - 0.7*s.bodyL*cos(hd_ang).*hd_vel - ...
 unit_f = [cos(hd_ang+heave+pitch), sin(hd_ang+heave+pitch),...
             zeros(length(heave),1)];
 
+% Rotation matrix (to transform lift vector to body coordinates)
+% rotM = [cos(hd_ang) -sin(hd_ang) 0; sin(hd_ang) cos(hd_ang) 0; 0, 0, 1];
+       
 % Construct velocity vector for cross product calculation
 vel_vec = [u_parl, u_perp, zeros(length(u_parl),1)];  
 
 % Cross products of velocity with unit vectors (may be size Nx3)
 x_prod = cross(vel_vec,unit_f,2);
 
+% Compute sign correction for lift equation
+signL = angCalc(vel_vec,unit_f);
+
+% Repeat signL for cases when x_prod has N>1 rows
+signL = repmat(signL,1,3);
+
 % Lift 
-fin_L   = 0.5*s.cLift *s.rho*s.finA .* (cross(x_prod,vel_vec,2));
+fin_L   = (signL.*0.5*s.cLift *s.rho*s.finA) .* (cross(x_prod,vel_vec,2));
 
 % Drag
 % fin_D = (0.5*s.rho*s.cD_perp).*abs((u_parl)).*(u_parl);
 
 % Forward thrust (aligned with long axis of fish)
 thrust_fwd = fin_L(:,1) .* cos(hd_ang) - fin_L(:,2) .* sin(hd_ang);
+% lift_rot = rotM * fin_L';
+% thrust_fwd = lift_rot(1);
 
 % Lateral thrust (perpendicular to long axis of fish), not correct
 % thrust_lat = -fin_L(1) * sin(y(5)) + fin_L(2) * cos(y(5));
@@ -77,13 +88,40 @@ lift(:,2) = thrust_fwd.*sin(hd_ang);
 
 % Torque due to lift force (cross product of fin position and lift vector)
 fin_pos            = [finPosB zeros(length(thrust_fwd),1)];
-lift_vec           = [fin_L(:,1:2) zeros(length(thrust_fwd),1)];
+% lift_vec           = [lift, zeros(length(thrust_fwd),1)];
+lift_vec           = fin_L;
 fin_pos_cross_lift = cross(fin_pos,lift_vec,2);
 
 torque = (fin_pos_cross_lift(:,3)); 
 
+%% Compute lift correction factor
+    function signL = angCalc(vel_vec,unit_f)
 
-
+%     % Norm of unit vectors (should be 1)
+%     unit_norm = sqrt(sum(unit_f.^2,2));
+%     
+%     % Norm of velocity vector
+%     vel_norm = sqrt(sum(vel_vec.^2,2));
+%     
+%     % Dot product between orientation of fin and velocity
+%     orient_dot_vel = dot(unit_f,vel_vec,2);
+%     
+%     % Cross product between orientation of fin and velocity
+%     orient_x_vel = cross(unit_f,vel_vec,2);
+%     
+%     % Norm of cross products
+%     cross_norm = sqrt(sum(orient_x_vel.^2,2));
+%     
+%     % Angle between fin orientation and velocity vector
+%     atck_ang = atan2(cross_norm,orient_dot_vel);
+%     
+%     signL = sign(cos(atck_ang));
+    
+    argU = atan2(unit_f(:,2),unit_f(:,1));
+    argV = atan2(vel_vec(:,2),vel_vec(:,1));
+   
+    signL = sign(cos(argU-argV));
+    end
 
 
 if 0
@@ -121,9 +159,7 @@ if 0
 %     atck_ang = atan2(cross_norm,orient_dot_vel);
 %     
 %     figure, plot(t,atck_ang*180/pi)
-    
-    
-    ttt=3;
+
 end
 
 % function [u_parl,u_perp] = getSpeed(u_fish,pitch,heave,h_prime,fp,t)
@@ -150,6 +186,7 @@ end
 % % Velocity of center of mass of fin
 % u_parl = omega_mat(1,3) + fp(2);
 % u_perp = omega_mat(2,3) + fp(1);
+
 
 
 %% For test simulations
@@ -262,6 +299,8 @@ if 0
         end
     end
     
+end
+
 end
 
 

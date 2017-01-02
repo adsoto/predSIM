@@ -33,17 +33,20 @@ if nargin < 3
 end
 
 % Time span (sec)
-p.simDur = 2;
+p.simDur = 1;
 
 % Maximum step size of simulation (s)
 p.maxStep   = 1e-2;
 
 % Relative tolerence of the simulation
-p.rel_tol = 1e-4;
+p.rel_tol = 1e-8;
 
 
 %% Morphological and mechanical parameters
 % Scaling relations come from McHenry & Lauder (2006)
+
+% Fraction of body length where COM is located, measured from rostrum
+p.bFrac = 0.2;
 
 % Density of fluid (kg/m^3)
 p.rho = 1000;
@@ -68,7 +71,7 @@ surfA   = 3.06E-1 * bodyL^(2.16);
 p.SA    = surfA * 10^-6;                % (m^2)
 
 % Body moment of inertia---for a solid ellipsoid about z-axis---(kg m^2)
-p.bodyI = (p.mass/5) * (p.bodyL^2 + p.bodyW^2) + p.mass*(0.2*p.bodyL)^2;
+p.bodyI = (p.mass/5) * (p.bodyL^2 + p.bodyW^2) + p.mass*(0.3*p.bodyL)^2;
 
 %p.bodyI = p.bodyI/10;
 
@@ -101,7 +104,7 @@ p.U0 = 0.01;
 %p.beatSpd = 0.02;
 
 % Max amplitude of tail heaving (rad)
-p.maxHeave = 90 * pi/180;
+p.maxHeave = 60 * pi/180;
 
 % Coefficient for solution during glide (m)
 p.cGlide = (2*p.mass)/(p.cDrag * p.SA * p.rho);
@@ -164,7 +167,7 @@ sM = 1 / p.mass;
 sT = 10^0;
 
 % Store scaling factors in 's' structure
-s.SL = sL;
+s.sL = sL;
 s.sM = sM;
 s.sT = sT;
 
@@ -183,6 +186,7 @@ s.pitch0    = p.pitch0;
 s.h0        = p.h0;
 s.cD_parl   = p.cD_parl;
 s.cD_perp   = p.cD_perp;
+s.bFrac     = p.bFrac;
 
 % Linear/Area dimensions
 s.bodyL     = p.bodyL   * sL;
@@ -229,8 +233,8 @@ capInd    = 0;
 %% Controller parameters
 
 % Vector from pred to prey (range vector)
-rangeX = s.preyX - (s.predX + (0.3*s.bodyL)*cos(s.theta0));
-rangeY = s.preyY - (s.predY + (0.3*s.bodyL)*sin(s.theta0));
+rangeX = s.preyX - (s.predX + (s.bFrac*s.bodyL)*cos(s.theta0));
+rangeY = s.preyY - (s.predY + (s.bFrac*s.bodyL)*sin(s.theta0));
 
 % Angle of range angle (intertial FOR)
 alpha = atan2(rangeY,rangeX);
@@ -252,7 +256,7 @@ s.turnDirec = turnDirec;
 
 %% Run ODE solver in a loop
 
-refine = 4;
+refine = 1;
 
 % Solver options for turning phase
 opts = odeset('Events',@turnEvents,'Refine',refine,'RelTol', s.rel_tol);
@@ -270,7 +274,7 @@ init = [s.predX, s.U0*cos(s.theta0), s.predY, s.U0*sin(s.theta0), s.theta0, 0];
 %[s,~] = fin_kine(s,init,tspan(1));
 
 % Distance from body COM to fin quarter-chord point
-s.d_bodyfin = 0.7*s.bodyL+s.pedL+0.25*s.finL;
+s.d_bodyfin = (1-s.bFrac)*s.bodyL+s.pedL+0.25*s.finL;
 
 % Initial conditions in the form: 
 % [x, x', y, y', theta, theta',pitch,heave,pitch',heave']
@@ -304,9 +308,12 @@ while ~s.capture
     
     % Speed of tail beat
     %TODO: Make this a control parameter
-    s.beatSpd = s.kP * phi;
+%     s.beatSpd = s.kP * phi;
 %     s.beatSpd = (s.bodyL * s.tailFreq)*6;
+    s.beatSpd = 10;
  
+%     s.tL = 100;
+    
     % Generate fin kinematics for tail beat 
     s = gen_kinematics(s);
     
@@ -332,6 +339,7 @@ while ~s.capture
     
     if ~isempty(idx)
         disp('rotational vel. blowing up')
+%         y(idx,6)
     end
         
     % reset hd_vel and fin variables to zero for glide
@@ -365,7 +373,7 @@ while ~s.capture
     tout    = [tout; t(2:nt)];
     yout    = [yout; y(2:nt,:)];
     
-    % TO DO: Figure out how to include distance threshold detection 
+%     % TO DO: Figure out how to include distance threshold detection 
 %     teout   = [teout; te];          % Events at tstart are never reported.
 %     yeout   = [yeout; ye];
 %     ieout   = [ieout; ie];
@@ -597,8 +605,8 @@ end
 %         heading = atan2(y(4),y(2));
         
         % Vector from pred rostrum to prey (range vector)
-        rangeX = s.preyX - (y(1) + (0.2*s.bodyL)*cos(heading));
-        rangeY = s.preyY - (y(3) + (0.2*s.bodyL)*sin(heading));
+        rangeX = s.preyX - (y(1) + (s.bFrac*s.bodyL)*cos(heading));
+        rangeY = s.preyY - (y(3) + (s.bFrac*s.bodyL)*sin(heading));
         
         % Distance to prey (scaled units)
         dist = norm([rangeX, rangeY]);
@@ -634,9 +642,11 @@ end
         % Preallocate vector for system of equations
         y = zeros(length(tGlide),10);
         
+        % TO DO: Fix cases when initial speed is negative
+        
         % Compute position during glide
-        y(:,1) = s.cGlide .* (log((Vbod_x.*tGlide)./s.cGlide + 1)) + x_Pos;
-        y(:,3) = s.cGlide .* (log((Vbod_y.*tGlide)./s.cGlide + 1)) + y_Pos;
+        y(:,1) = sign(Vbod_x)*s.cGlide .* (log((abs(Vbod_x).*tGlide)./s.cGlide + 1)) + x_Pos;
+        y(:,3) = sign(Vbod_y)*s.cGlide .* (log((abs(Vbod_y).*tGlide)./s.cGlide + 1)) + y_Pos;
         
         % Compute velocity during glide
         y(:,2) = Vbod_x ./ (Vbod_x * s.cGlide .* tGlide + 1);
@@ -668,7 +678,7 @@ dCycle = 0.2;
 lag = 0.05;
 
 % Tail-beat period (includes zero padding)
-tau = 1./s.tailFreq;
+tau = (1./s.tailFreq);
 
 % Peak tail speed
 Vmax = s.beatSpd;
@@ -681,7 +691,6 @@ zEndDur = tau/10;
 
 % Duration of beat outward
 pwr_dur = dCycle * (tau-zStartDur-zEndDur);
-
 
 % If the tail cannot move far enough . . .
 if pwr_dur*Vmax > s.maxHeave
@@ -714,7 +723,9 @@ h = t.*0;
 idx = (t > zStartDur) & (t<(tau-zEndDur));
 
 % Discrete heave values
-h(idx) = s.turnDirec * h_amp .* ...
+% h(idx) = s.turnDirec * h_amp .* ...
+%     (sawtooth(2*pi*(t(idx)-zStartDur)./(tau-zStartDur-zEndDur),dCycle)./2+0.5);
+h(idx) = h_amp .* ...
     (sawtooth(2*pi*(t(idx)-zStartDur)./(tau-zStartDur-zEndDur),dCycle)./2+0.5);
 
 % Delay of pitching after heaving
@@ -733,23 +744,27 @@ iPwr = (t >= (zStartDur + delay)) & (t<(zStartDur + delay + pwr_dur));
 iRecov = (t>=(zStartDur + delay + pwr_dur)) & (t<(tau-zEndDur+delay));
 
 % Discrete pitch values during power stroke
-p(iPwr) = s.turnDirec * (1*h_amp/2) .* ...
+% p(iPwr) = s.turnDirec * (1*h_amp/2) .* ...
+%     (sawtooth(2*pi*(t(iPwr)-zStartDur-delay)./(2*pwr_dur)-pi/2,0.5));
+p(iPwr) = (1*h_amp/2) .* ...
     (sawtooth(2*pi*(t(iPwr)-zStartDur-delay)./(2*pwr_dur)-pi/2,0.5));
 
 % Discrete pitch values during recovery stroke
-p(iRecov) = -s.turnDirec * (1*h_amp/2) .* ...
+% p(iRecov) = -s.turnDirec * (1*h_amp/2) .* ...
+%     (sawtooth(2*pi*(t(iRecov)-zStartDur-delay-pwr_dur)./(2*rcvr_dur)-pi/2,0.5));
+p(iRecov) = -(1*h_amp/2) .* ...
     (sawtooth(2*pi*(t(iRecov)-zStartDur-delay-pwr_dur)./(2*rcvr_dur)-pi/2,0.5));
 
 % h = h_amp/2*sin(2*pi*(s.tailFreq)*t);
 % p = h_amp/4*sin(2*pi*(s.tailFreq)*t + delay);
 
 % Fourier fit to heave data
-s.fHeave = fit(t,h,'fourier8');
-% s.fHeave = fit(t,h,'smoothingspline','SmoothingParam',1 - 3.1e-11);
+% s.fHeave = fit(t,h,'fourier8');
+s.fHeave = fit(t,h,'smoothingspline','SmoothingParam',1 - 3.1e-11);
 
 % Fourier fit to pitch data
-s.fPitch = fit(t,p,'fourier8');
-% s.fPitch = fit(t,p,'smoothingspline','SmoothingParam',1 - 3.1e-11);
+% s.fPitch = fit(t,p,'fourier8');
+s.fPitch = fit(t,p,'smoothingspline','SmoothingParam',1 - 3.1e-11);
 
 % Plot fits
 if 0
