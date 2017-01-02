@@ -9,7 +9,15 @@ function [p,sol] = run_predSIM_fin(xPrey,yPrey,kp)
 %%% TO DO: Think of a way to modulate the duration of a glide based on...
 % distance and/or bearing angle
 
+
+% Pred initial heading
+p.theta0 = 80*pi/180;                 % (rad)
+
+
 %% Simulation Parameters 
+
+% Turn on when interrogating the simulation results
+test_mode = 0;
 
 % Turn on figures
 plotOn = 0;
@@ -17,30 +25,35 @@ plotOn = 0;
 % Plot force data
 plotForce = 1;
 
-% Prey initial position (from input)
-if nargin < 2
-    p.preyX = 0.1;                       % (m)
-    p.preyY = 0.1;                      % (m)
-else
-    p.preyX = xPrey;
-    p.preyY = yPrey;
-end
-
-
-% Gain Parameter
-if nargin < 3
-    p.kP = 3.5e1;
-end
+% Run simulation with local coord transformation
+p.local_trans = 0;
 
 % Time span (sec)
-p.simDur = 2;
+p.simDur = 10;
 
 % Maximum step size of simulation (s)
 p.maxStep   = 1e-2;
 
 % Relative tolerence of the simulation
+%p.rel_tol = 1e-4;
 p.rel_tol = 1e-4;
+p.abs_tol = 1e-4;
 
+%% Prey and control parameters
+
+% Prey initial position (from input)
+if nargin < 2
+    p.preyX = 0.1;                       % (m)
+    p.preyY = 0.05;                      % (m)
+else
+    p.preyX = xPrey;
+    p.preyY = yPrey;
+end
+
+% Gain Parameter
+if nargin < 3
+    p.kP = 3.5e1;
+end
 
 %% Morphological and mechanical parameters
 % Scaling relations come from McHenry & Lauder (2006)
@@ -70,26 +83,22 @@ p.SA    = surfA * 10^-6;                % (m^2)
 % Body moment of inertia---for a solid ellipsoid about z-axis---(kg m^2)
 p.bodyI = (p.mass/5) * (p.bodyL^2 + p.bodyW^2) + p.mass*(0.2*p.bodyL)^2;
 
-%p.bodyI = p.bodyI/10;
-
 % Drag coefficent for coasting zebrafish (dimensionless)
 %cDrag   = 1.44E2 * bodyL^(-2.34);
 %p.cDrag = cDrag * 10^-3;
 p.cDrag = 0.07;
 
-% Lift coefficient of the tail
-p.cLift  = 2*pi;
+% Lift coefficient of the tail during power and recovery strokes
+p.cLift_pwr  = 2*pi;
+p.cLift_rcvy = p.cLift_pwr/2;
 
 % Rotational drag (dimensionless)
-%p.cDrag_rot = 0.02;
-p.cDrag_rot = 8*pi;
+p.cDrag_rot = 0.02;
+%p.cDrag_rot = 8*pi*100;
 
 % Pred initial position
 p.predX = 0;                         % (m)
 p.predY = 0;                         % (m)
-
-% Pred initial heading
-p.theta0 = 0*pi/180;                 % (rad)
 
 % Distance threshold
 p.dThresh = 0.5 * p.bodyL;           % (m)
@@ -104,7 +113,7 @@ p.U0 = 0.01;
 p.maxHeave = 90 * pi/180;
 
 % Coefficient for solution during glide (m)
-p.cGlide = (2*p.mass)/(p.cDrag * p.SA * p.rho);
+%p.cGlide = (2*p.mass)/(p.cDrag * p.SA * p.rho);
 
 
 %% Caudal fin parameters
@@ -173,16 +182,19 @@ sF = sM * sL / sT^2;
 sP = sF / sL^2;
 
 % Dimensionless parameters
-s.cDrag     = p.cDrag;
-s.cDrag_rot = p.cDrag_rot;
-s.cLift     = p.cLift;
-s.rel_tol   = p.rel_tol;
-s.theta0    = p.theta0;
-s.psi       = p.psi; 
-s.pitch0    = p.pitch0;
-s.h0        = p.h0;
-s.cD_parl   = p.cD_parl;
-s.cD_perp   = p.cD_perp;
+s.cDrag       = p.cDrag;
+s.cDrag_rot   = p.cDrag_rot;
+s.cLift_pwr   = p.cLift_pwr;
+s.cLift_rcvy  = p.cLift_rcvy;
+s.rel_tol     = p.rel_tol;
+s.abs_tol     = p.abs_tol;
+s.theta0      = p.theta0;
+s.psi         = p.psi; 
+s.pitch0      = p.pitch0;
+s.h0          = p.h0;
+s.cD_parl     = p.cD_parl;
+s.cD_perp     = p.cD_perp;
+s.local_trans = p.local_trans;
 
 % Linear/Area dimensions
 s.bodyL     = p.bodyL   * sL;
@@ -196,7 +208,7 @@ s.dThresh   = p.dThresh * sL;
 s.finL      = p.finL    * sL;
 s.pedL      = p.pedL    * sL;
 s.finA      = p.finA    * sL^2;
-s.cGlide    = p.cGlide  * sL;
+%s.cGlide    = p.cGlide  * sL;
 
 % Mechanical properties
 s.mass      = p.mass    * sM;
@@ -249,16 +261,68 @@ turnDirec = -sign(phi);
 % Set turn direction parameter
 s.turnDirec = turnDirec;
 
+%% Code for testing
+
+if test_mode
+    
+    n = 500;
+    
+    t = linspace(0,1./s.tailFreq,n)';
+    %hd_ang = linspace(0,120/180*pi,n)';
+    hd_ang = pi/2+pi/16 + 0.*t;
+    hd_vel = 0.*t;
+    x_vel = s.U0 .*cos(hd_ang);
+    y_vel = s.U0 .*sin(hd_ang);
+    
+    s.beatSpd = 35;
+    
+    % Generate fin kinematics for tail beat 
+    s = gen_kinematics(s);
+    
+    heave = s.fHeave(t);
+    pitch = s.fPitch(t);
+    cLift = s.cLift(t);
+    
+    p_prime = differentiate(s.fPitch,t);
+    h_prime = differentiate(s.fHeave,t);
+    
+    
+    [lift,torque,drag,drag_theta] = fin_kine(s,hd_ang,hd_vel,...
+                           pitch,heave,p_prime,h_prime,x_vel,y_vel,cLift);
+    
+   figure
+   
+   subplot(5,1,1)
+   plot(t,hd_ang.*180/pi)
+   grid on
+   xlabel('t');ylabel('heading (deg)')
+   
+   subplot(5,1,2)
+   plot(t,heave.*180/pi,'-',t,pitch.*180/pi,'-')
+   grid on
+   xlabel('t');ylabel('angle')
+   legend('heave','pitch')
+   
+   subplot(5,1,3)
+   plot(t,lift(:,1),'-',t,lift(:,2),'-')
+   grid on
+   xlabel('t');ylabel('lift')
+   legend('x','y')   
+end
+
 
 %% Run ODE solver in a loop
 
 refine = 4;
 
 % Solver options for turning phase
-opts = odeset('Events',@turnEvents,'Refine',refine,'RelTol', s.rel_tol);
-
+opts = odeset('Events',@turnEvents,'Refine',refine,'RelTol', ...
+    s.rel_tol,'AbsTol',s.abs_tol);
+% opts = odeset('Events',@turnEvents,'Refine',refine,'RelTol', ...
+%     s.rel_tol,'AbsTol',s.abs_tol,'NormControl','on',...
+%     'MaxStep',(1/s.tailFreq)/1e-20);
 % Solver options for glide phase
-opts2 = odeset('Events',@turnEvents2,'Refine',refine,'RelTol', s.rel_tol);
+%opts2 = odeset('Events',@turnEvents2,'Refine',refine,'RelTol', s.rel_tol);
 
 % Time span for simulation
 %tspan = [0 s.simDur];
@@ -274,7 +338,7 @@ s.d_bodyfin = 0.7*s.bodyL+s.pedL+0.25*s.finL;
 
 % Initial conditions in the form: 
 % [x, x', y, y', theta, theta',pitch,heave,pitch',heave']
-init = [init, 0, 0, 0, 0]';
+init = [init, 0, 0, 0, 0, s.cLift_rcvy]';
 
 % Initial distance to prey
 [~,~,distInit] = controlParams(init);
@@ -305,13 +369,26 @@ while ~s.capture
     % Speed of tail beat
     %TODO: Make this a control parameter
     s.beatSpd = s.kP * phi;
-%     s.beatSpd = (s.bodyL * s.tailFreq)*6;
- 
+%   s.beatSpd = (s.bodyL * s.tailFreq)*6;
+%s.beatSpd = 35; 
+%s.beatSpd = 55;
+
     % Generate fin kinematics for tail beat 
     s = gen_kinematics(s);
     
     % Simulation period for beat
     tspan(1,2) = tspan(1) + 1/s.tailFreq; 
+    
+    % Rate of pitch at t = 0
+    init(9) = differentiate(s.fPitch,0);
+    
+    % Rate of heave at t = 0
+    init(10) = differentiate(s.fHeave,0);
+    
+    % Rate of lift coefficient at t = 0;
+    %init(11) = differentiate(s.cLift,0);
+    
+    %init
     
     % Solve ODE (during fin oscillation)
     [t,y,te,ye,ie] = ode15s(@(t,y) predSIM(t,y,s), tspan, init, opts);
@@ -323,17 +400,37 @@ while ~s.capture
     teout   = [teout; te];          % Events at tstart are never reported.
     yeout   = [yeout; ye];
     ieout   = [ieout; ie];
+    
+    % Use the following code to interrogate last tail beat (if sim fails)
+    if 0
+        % Store results
+        sol = store_results(tout,yout,sL,sT);
+        
+        % Calculate forces
+    [sol.lift,sol.torque,sol.drag,sol.drag_theta] = ...
+        fin_kine(p,sol.theta,sol.dtheta,sol.pitch,sol.heave,...
+        sol.dpitch,sol.dheave,sol.dx,sol.dy,sol.cLift);
+
+        % Plot results
+        plot_variables(sol)
+        figure
+        plot_traj(sol,p)
+    end
+    
+    % Check that rotational velocity not going crazy
+    if max(abs(y(:,6)) > 1e4)==1
+        error('rotational vel. blowing up')
+    end
+    
+    % Check direction of velocity
+    head = [cos(y(end,5)) sin(y(end,5))];
+    vel = [y(end,2) y(end,4)];
+    direction = dot(head,vel);
+    
 
     % Set the new initial conditions.
-    init = y(nt,:);
+    init = y(nt,:)';
     
-    % check values of ang. vel.
-    idx = find(abs(y(:,6)) > 1e4);
-    
-    if ~isempty(idx)
-        disp('rotational vel. blowing up')
-    end
-        
     % reset hd_vel and fin variables to zero for glide
     init(6:10) = 0;
     
@@ -358,7 +455,7 @@ while ~s.capture
 %     [t,y,te,ye,ie] = ode45(@(t,y) predSIM_glide(t,y,s),tspan, init, opts2);
 
     % Compute solution during glide
-    [t,y] = simGlide(tspan,init);
+    [t,y] = simGlide(tspan,init,300);
     
     % Accumulate output.
     nt      = length(t);
@@ -396,20 +493,12 @@ while ~s.capture
         break
     end
     
+    disp([num2str(iter) ' Beat and glide completed'])
 end
 
 % Store results
-sol.t       = tout              ./ sT;
-sol.x       = yout(:,1) ./ sL;
-sol.y       = yout(:,3) ./ sL;
-sol.theta   = yout(:,5);
-sol.dx      = yout(:,2) ./ sL   .* sT;
-sol.dy      = yout(:,4) ./ sL   .* sT;
-sol.dtheta  = yout(:,6)         .* sT;
-sol.pitch   = yout(:,7);
-sol.heave   = yout(:,8);
-sol.dpitch  = yout(:,9)         .* sT;
-sol.dheave  = yout(:,10)        .* sT;
+sol = store_results(tout,yout,sL,sT);
+
 sol.phiPre  = phiPre;
 sol.phiPost = phiPost;
 sol.distInit= distInit  ./ sL;
@@ -418,12 +507,17 @@ sol.capture = capInd;
 sol.preyPos = [p.preyX,p.preyY];
 sol.params  = s;
 
-
-% Calculate forces
-[sol.lift,sol.torque,sol.drag,sol.drag_theta] = ...
-    fin_kine(p,sol.theta,sol.dtheta,sol.pitch,sol.heave,...
-             sol.dpitch,sol.dheave,sol.dx,sol.dy);
-
+if p.local_trans
+    % Calculate forces (local transformation method)
+    [sol.lift,sol.drag,sol.torque] = local_forces(p,sol.theta,sol.dtheta,sol.x,sol.y,...
+                        sol.pitch,sol.heave,sol.dpitch,sol.dheave,...
+                        sol.dx,sol.dy,sol.cLift);
+else
+    % Calculate forces
+    [sol.lift,sol.torque,sol.drag,sol.drag_theta] = ...
+        fin_kine(p,sol.theta,sol.dtheta,sol.pitch,sol.heave,...
+        sol.dpitch,sol.dheave,sol.dx,sol.dy,sol.cLift);
+end
 % Clear others
 % clear t y tspan init s sT sL sM
 
@@ -434,50 +528,10 @@ if plotForce
     
     figure;
     
-    % tail angle
-    subplot(5,1,1)
-    plot(sol.t,sol.heave.*180/pi,'-',sol.t,sol.pitch.*180/pi,'-')
-    xlabel('t (s)')
-    ylabel('Tail angle (deg)')
-    legend('h','p')
-    grid on
+    plot_variables(sol)
     
-    % thrust
-    subplot(5,1,2)
-    plot(sol.t,sol.lift(:,1).*1000,'-',sol.t,sol.lift(:,2).*1000,'-')                    
-    xlabel('t (s)')
-    ylabel('Thrust (mN)')
-    legend('x','y')
-    grid on
-    
-    % heading angle
-    subplot(5,1,3)
-    plot(sol.t,sol.theta.*180/pi,'-')                    
-    xlabel('t (s)')
-    ylabel('Heading (deg)')
-    grid on
-
-    % position
-    subplot(5,1,4)
-    plot(sol.t,sol.x.*100,'-',sol.t,sol.y.*100,'-')                    
-    xlabel('t (s)')
-    ylabel('Position (cm)')
-    legend('x','y')
-    grid on
-    
-    % speed
-    subplot(5,1,5)
-    plot(sol.t,sol.dx.*100,'-',sol.t,sol.dy.*100,'-')                    
-    xlabel('t (s)')
-    ylabel('Speed (cm/s)')
-    legend('x','y')
-    grid on
-    
-    % Trajectory
     figure;
-    plot(sol.x.*100,sol.y.*100,'-',sol.x(1).*100,sol.y(1).*100,'o')
-    axis equal
-    xlabel('x (cm)'); ylabel('y (cm)')
+    plot_traj(sol,p)
 end
 
 
@@ -524,6 +578,7 @@ if plotOn
 end
 
 % -----------------------------------------------------------------------
+
 %% Nested functions -- problem parameters provided by the outer function.
 %
     function [value,isterminal,direction] = turnEvents(t,y)
@@ -616,44 +671,130 @@ end
 
 % -----------------------------------------------------------------------
 
-    function [tGlide,y] = simGlide(tspan,y)
+    function [tGlide,y] = simGlide(tspan,init,nGlide)
+        
+        % Glide coefficient
+        cGlide = (2*s.mass)/(s.cDrag * s.SA * s.rho);
         
         % Unpack state variables
-        x_Pos  = y(1);
-        Vbod_x = y(2);
-        y_Pos  = y(3);
-        Vbod_y = y(4);
-        theta  = y(5);
+        x_Pos  = init(1);
+        Vbod_x = init(2);
+        y_Pos  = init(3);
+        Vbod_y = init(4);
+        theta  = init(5);
         
         % Shift time vector to begin at t=0
         tEnd = tspan(2) - tspan(1);
         
         % Time vector during glide
-        tGlide = linspace(0,tEnd)';
+        tGlide = linspace(0,tEnd,nGlide)';
         
         % Preallocate vector for system of equations
-        y = zeros(length(tGlide),10);
+        y = zeros(length(tGlide),length(init));
         
         % Compute position during glide
-        y(:,1) = s.cGlide .* (log((Vbod_x.*tGlide)./s.cGlide + 1)) + x_Pos;
-        y(:,3) = s.cGlide .* (log((Vbod_y.*tGlide)./s.cGlide + 1)) + y_Pos;
+        y(:,1) = sign(Vbod_x)*cGlide .* ...
+                     (log((abs(Vbod_x).*tGlide)./cGlide + 1)) + x_Pos;
+        %y(:,1) = cGlide .* (log((Vbod_x.*tGlide)./cGlide + 1)) + x_Pos;
+        y(:,3) = sign(Vbod_y)*cGlide .* (log((abs(Vbod_y).*tGlide)./cGlide + 1)) + y_Pos;
         
         % Compute velocity during glide
-        y(:,2) = Vbod_x ./ (Vbod_x * s.cGlide .* tGlide + 1);
-        y(:,4) = Vbod_y ./ (Vbod_y * s.cGlide .* tGlide + 1);
+        y(:,2) = Vbod_x ./ (Vbod_x * cGlide .* tGlide + 1);
+        y(:,4) = Vbod_y ./ (Vbod_y * cGlide .* tGlide + 1);
         
         % Generate points for other state variables
-        y(:,5) = theta .* ones(length(tGlide),1);
+        y(:,5)    = theta .* ones(length(tGlide),1);
         y(:,6:10) = repmat(zeros(length(tGlide),1),1,5);
+        y(:,11)   = s.cLift_rcvy .* ones(length(tGlide),1);
         
         % Shift time forward for output
         tGlide = tGlide + tspan(1);
          
+        % Check that answer is a real number
+        if max(~isreal(y))
+            error('These values should all be real numbers')
+        end
     end
 
 
 end
 
+
+function sol = store_results(tout,yout,sL,sT)
+sol.t       = tout              ./ sT;
+sol.x       = yout(:,1) ./ sL;
+sol.y       = yout(:,3) ./ sL;
+sol.theta   = yout(:,5);
+sol.dx      = yout(:,2) ./ sL   .* sT;
+sol.dy      = yout(:,4) ./ sL   .* sT;
+sol.dtheta  = yout(:,6)         .* sT;
+sol.pitch   = yout(:,7);
+sol.heave   = yout(:,8);
+sol.dpitch  = yout(:,9)         .* sT;
+sol.dheave  = yout(:,10)        .* sT;
+sol.cLift   = yout(:,11);
+end
+
+function plot_variables(sol)
+
+% tail angle
+subplot(6,1,1)
+plot(sol.t,sol.heave.*180/pi,'-',sol.t,sol.pitch.*180/pi,'-')
+xlabel('t (s)')
+ylabel('Tail angle (deg)')
+legend('h','p')
+grid on
+
+% thrust
+subplot(6,1,2)
+plot(sol.t,sol.lift(:,1).*1000,'-',sol.t,sol.lift(:,2).*1000,'-')
+xlabel('t (s)')
+ylabel('Thrust (mN)')
+legend('x','y')
+grid on
+
+% drag
+subplot(6,1,3)
+plot(sol.t,sol.drag(:,1).*1000,'-',sol.t,sol.drag(:,2).*1000,'-')
+xlabel('t (s)')
+ylabel('Drag (mN)')
+legend('x','y')
+grid on
+
+% heading angle
+subplot(6,1,4)
+plot(sol.t,sol.theta.*180/pi,'-')
+xlabel('t (s)')
+ylabel('Heading (deg)')
+grid on
+
+% position
+subplot(6,1,5)
+plot(sol.t,sol.x.*100,'-',sol.t,sol.y.*100,'-')
+xlabel('t (s)')
+ylabel('Position (cm)')
+legend('x','y')
+grid on
+
+% speed
+subplot(6,1,6)
+plot(sol.t,sol.dx.*100,'-',sol.t,sol.dy.*100,'-')
+xlabel('t (s)')
+ylabel('Speed (cm/s)')
+legend('x','y')
+grid on
+
+end
+
+function plot_traj(sol,p)
+
+% Trajectory
+h = plot(sol.x.*100,sol.y.*100,'k-',sol.x(1).*100,sol.y(1).*100,'ko',...
+    p.preyX*100,p.preyY*100,'ro');
+set(h(3),'MarkerFaceColor','r')
+axis equal
+xlabel('x (cm)'); ylabel('y (cm)')
+end
 
 function s = gen_kinematics(s)
 
@@ -709,6 +850,7 @@ t = [linspace(0,zStartDur,numendpts)';...
 % Initialize heave and pitch as series of zeros
 p = t.*0;
 h = t.*0;
+c = t.*0 + s.cLift_rcvy;
 
 % Index of when tail is moving
 idx = (t > zStartDur) & (t<(tau-zEndDur));
@@ -733,35 +875,52 @@ iPwr = (t >= (zStartDur + delay)) & (t<(zStartDur + delay + pwr_dur));
 iRecov = (t>=(zStartDur + delay + pwr_dur)) & (t<(tau-zEndDur+delay));
 
 % Discrete pitch values during power stroke
-p(iPwr) = s.turnDirec * (1*h_amp/2) .* ...
+p(iPwr) = s.turnDirec * (0.8*h_amp) .* ...
     (sawtooth(2*pi*(t(iPwr)-zStartDur-delay)./(2*pwr_dur)-pi/2,0.5));
 
 % Discrete pitch values during recovery stroke
-p(iRecov) = -s.turnDirec * (1*h_amp/2) .* ...
+p(iRecov) = -s.turnDirec * (0.8*h_amp) .* ...
     (sawtooth(2*pi*(t(iRecov)-zStartDur-delay-pwr_dur)./(2*rcvr_dur)-pi/2,0.5));
 
+% Values for the lift coefficient
+c(iPwr)     = s.cLift_pwr;
+c(iRecov)   = s.cLift_rcvy;
+
+
+smParam = 1 - 1e-8;
 % h = h_amp/2*sin(2*pi*(s.tailFreq)*t);
 % p = h_amp/4*sin(2*pi*(s.tailFreq)*t + delay);
 
 % Fourier fit to heave data
-s.fHeave = fit(t,h,'fourier8');
-% s.fHeave = fit(t,h,'smoothingspline','SmoothingParam',1 - 3.1e-11);
+%s.fHeave = fit(t,h,'fourier8');
+%s.fHeave = fit(t,h,'smoothingspline','SmoothingParam',1 - 3.1e-11);
+s.fHeave = fit(t,h,'smoothingspline','SmoothingParam',smParam);
 
 % Fourier fit to pitch data
-s.fPitch = fit(t,p,'fourier8');
-% s.fPitch = fit(t,p,'smoothingspline','SmoothingParam',1 - 3.1e-11);
+%s.fPitch = fit(t,p,'fourier8');
+%s.fPitch = fit(t,p,'smoothingspline','SmoothingParam',1 - 3.1e-11);
+s.fPitch = fit(t,p,'smoothingspline','SmoothingParam',smParam);
+
+% Fit to CL
+%s.cLift  = fit(t,c,'fourier8');
+s.cLift = fit(t,c,'smoothingspline','SmoothingParam',smParam);
 
 % Plot fits
 if 0
    figure
-   subplot(2,1,1)
+   subplot(3,1,1)
    plot(s.fHeave,t,h)
    grid on
    xlabel('t');ylabel('h (rad)')
    
-   subplot(2,1,2)
+   subplot(3,1,2)
    plot(s.fPitch,t,p)
    xlabel('t');ylabel('p (rad)')
+   grid on
+   
+   subplot(3,1,3)
+   plot(s.cLift,t,c)
+   xlabel('t');ylabel('CL')
    grid on
 end
 
