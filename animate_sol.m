@@ -23,7 +23,6 @@ v.yBodL   = p.bodyW/2 .* sin(theta);
 %TODO:Fin
 
 
-
 % Time vector
 v.t = linspace(sol.t(1),sol.t(end),num_time)';
 
@@ -45,19 +44,18 @@ v.drag   = sqrt(interp1(sol.t,sol.drag(:,1),v.t).^2 + ...
 %rng = max([range(x) range(y)]);
 %lims = [min([min(x) min(y)])-p.bodyL min([min(x) min(y)])+rng+p.bodyL];
 
-f = figure('DoubleBuffer','on','Visible','on','Color','w');
+f = figure('DoubleBuffer','on','Visible','off','Color','w');
 
-% Plot first frame
-plot_body(v,1,p)
-hold on
-
-% Plot last fame
-plot_body(v,num_time,p)
+% Plot series of frames
+plot_body(v,1,p,5); hold on
+plot_body(v,round(length(v.t)/4),p,5);hold on
+plot_body(v,round(length(v.t)/2),p,5);hold on
+plot_body(v,round(length(v.t)*.75),p,5);hold on
+plot_body(v,length(v.t),p,5);hold on
 axis equal
 
 % Plot prey position
-hold on
-plot(sol.preyPos(1),sol.preyPos(2),'r.','MarkerSize',18)
+plot(p.preyX,p.preyY,'r.','MarkerSize',18)
 hold off
 
 
@@ -70,6 +68,8 @@ xL(2) = xL(2) + range(xL)/10;
 yL(1) = yL(1) - range(xL)/10;
 yL(2) = yL(2) + range(xL)/10;
 
+set(f,'Visible','on')
+
 % Prompt for where to save movie            
 if save_movie
     [FileName,PathName] = uiputfile;
@@ -80,20 +80,24 @@ if save_movie
     outputVideo.FrameRate = playrate;
     open(outputVideo)
 end
-      
+   
+% Get size of tail and prey
+tailThick = ceil(0.1*range(xlim)*100);
+preySize = round(3*range(xlim)*100);
 
 % Loop thru time
 for i = 1:length(v.t)
     
     % Make figure visible
     set(f,'Visible','on')
-    
+
     % Plot prey position
-    plot(sol.preyPos(1),sol.preyPos(2),'r.','MarkerSize',18)
+    plot(sol.preyPos(1),sol.preyPos(2),'r.','MarkerSize',...
+        preySize)
     hold on
     
     % Plot current frame
-    plot_body(v,i,p)
+    plot_body(v,i,p,tailThick)
     hold off
     
     % Set axes
@@ -118,7 +122,17 @@ end
 
 
 
-function plot_body(v,frame,p)
+function plot_body(v,frame,p,tailThick)
+
+% Distance from COM to posterior margin of trunk
+tr_len = 0.7*p.bodyL;
+
+% Length of peduncle
+pd_len = p.pedL;
+
+% Distance of COP along chord length
+tl_len = p.finL;
+
 % Current rotation matrix
 R = local_system([0 0],[cos(v.theta(frame)) sin(v.theta(frame))]);
     
@@ -157,6 +171,23 @@ end
 [xBodG,yBodG] = local_to_global([v.x(frame) v.y(frame)],R,v.xBodL,v.yBodL);
     
 
+% Coordinates of trailing edge of trunk
+tr_pos(:,1) = x - tr_len.*cos(theta);
+tr_pos(:,2) = y - tr_len.*sin(theta);
+
+% Coordinates of peduncle 
+pd_pos(:,1) = [tr_pos(:,1) - pd_len.*cos(theta+heave)];
+pd_pos(:,2) = [tr_pos(:,2) - pd_len.*sin(theta+heave)];
+
+% Coordinates of qtr-chord point           
+fin_pos(:,1) = pd_pos(:,1) -  tl_len.*cos(theta+heave+pitch);
+fin_pos(:,2) = pd_pos(:,2) -  tl_len.*sin(theta+heave+pitch);
+
+% Coordinate of leading edge of fin
+
+
+
+
 % Current position of fin quarter-chord point
 % finPos(1,1) = x - 0.7*p.bodyL*cos(theta) ...
 %                  - p.pedL*cos(theta+heave) ...
@@ -165,19 +196,19 @@ end
 %                  - p.pedL*sin(theta+heave) ...
 %                  - 0.25*p.finL*sin(theta+heave+pitch);
 
-% Fin leading edge coordinates             
-leadEdge(1,1) = x - 0.7*p.bodyL*cos(theta) ...
-                 - p.pedL*cos(theta+heave); 
-leadEdge(1,2) = y - 0.7*p.bodyL*sin(theta) ...
-                  - p.pedL*sin(theta+heave); 
-
-% Fin trailing edge coordinates               
-trailEdge(1,1) = x - 0.7*p.bodyL*cos(theta) ...
-                   - p.pedL*cos(theta+heave) ...
-                   - p.finL*cos(theta+heave+pitch);
-trailEdge(1,2) = y - 0.7*p.bodyL*sin(theta) ...
-                   - p.pedL*sin(theta+heave) ...
-                   - p.finL*sin(theta+heave+pitch);              
+% % Fin leading edge coordinates             
+% leadEdge(1,1) = x - 0.7*p.bodyL*cos(theta) ...
+%                  - p.pedL*cos(theta+heave); 
+% leadEdge(1,2) = y - 0.7*p.bodyL*sin(theta) ...
+%                   - p.pedL*sin(theta+heave); 
+% 
+% % Fin trailing edge coordinates               
+% trailEdge(1,1) = x - 0.7*p.bodyL*cos(theta) ...
+%                    - p.pedL*cos(theta+heave) ...
+%                    - p.finL*cos(theta+heave+pitch);
+% trailEdge(1,2) = y - 0.7*p.bodyL*sin(theta) ...
+%                    - p.pedL*sin(theta+heave) ...
+%                    - p.finL*sin(theta+heave+pitch);              
 
 % Draw body    
 h = fill(xBodG,yBodG,bodclr);
@@ -185,8 +216,8 @@ set(h,'EdgeColor','none')
 hold on
 
 
-h = plot([leadEdge(1) trailEdge(1)],[leadEdge(2) trailEdge(2)],'k-');
-set(h,'LineWidth',4,'Color',tailclr);
+h = plot([pd_pos(1) fin_pos(1)],[pd_pos(2) fin_pos(2)],'k-');
+set(h,'LineWidth',tailThick,'Color',tailclr);
 hold off
 
 % Colorbar
